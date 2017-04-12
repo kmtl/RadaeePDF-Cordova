@@ -25,7 +25,7 @@ public class PDFTopBar
 	public final View BarGetView(){return m_view;}
 	public final void BarShow()
 	{
-		m_view.clearAnimation();
+	/*	m_view.clearAnimation();
 		Animation anim = new TranslateAnimation(0, 0, -m_view.getHeight(), 0);
 		anim.setDuration(200);
 		anim.setAnimationListener(new Animation.AnimationListener()
@@ -41,11 +41,11 @@ public class PDFTopBar
 			{
 			}
 		});
-		m_view.startAnimation(anim);
+		m_view.startAnimation(anim); */
 	}
 	public final void BarHide()
 	{
-		m_view.clearAnimation();
+	/*	m_view.clearAnimation();
 		Animation anim = new TranslateAnimation(0, 0, 0, -m_view.getHeight());
 		anim.setDuration(200);
 		anim.setAnimationListener(new Animation.AnimationListener()
@@ -61,7 +61,7 @@ public class PDFTopBar
 				m_view.setVisibility(View.INVISIBLE);
 			}
 		});
-		m_view.startAnimation(anim);
+		m_view.startAnimation(anim); */
 	}
 	public final int BarGetHeight()
 	{
