@@ -1,7 +1,5 @@
 <resources>
 
-    <string name="app_name">Radaee Reader</string>
-
     <string name="failed_invalid_password">Open Failed: Invalid Password</string>
     <string name="failed_invalid_format">Open Failed: Damaged or Invalid PDF file</string>
     <string name="failed_encryption">Open Failed: Unknown Encryption</string>

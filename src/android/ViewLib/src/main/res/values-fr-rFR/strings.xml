@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-<string name="app_name">Radaee Reader</string>
 <string name="failed_invalid_password">"Erreur à l'ouverture : mot de passe invalide"</string>
 <string name="failed_invalid_format">"Erreur à l'ouverture : fichier PDF invalide ou endommagé"</string>
 <string name="failed_encryption">"Erreur à l'ouverture : cryptage inconnu"</string>
