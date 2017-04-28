@@ -1,5 +1,5 @@
 <resources>
-
+    <string name="launcher_name">@string/app_name</string>
     <string name="failed_invalid_password">غير قابل للفتح: كلمة المرور غير صالحة</string>
     <string name="failed_invalid_format">غير قابل للفتح: ملف PDF تالف أو غير صالح</string>
     <string name="failed_encryption">غير قابل للفتح: التشفير غير معروف</string>
