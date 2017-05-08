@@ -267,7 +267,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener
     {
     	if(m_controller == null || m_controller.OnBackPressed())
     	{
-        	if(m_modified)
+        	/*if(m_modified)
         	{
 				mFileState = MODIFIED_NOT_SAVED;
         		TextView txtView = new TextView(this);
@@ -291,7 +291,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener
 				           }
 				       }).show(); 
         	}
-        	else super.onBackPressed();
+        	else*/ super.onBackPressed();
     	}
     }
 
