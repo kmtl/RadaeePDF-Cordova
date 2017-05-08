@@ -52,7 +52,7 @@ module.exports = function (ctx) {
 
     console.log('*****************************************');
     console.log('*       inject file R  ANDROID             *');
-    console.log('*****************************************');s
+    console.log('*****************************************');
     console.log('*       Inject: ' + replaceWith + '    *');
     
     fileImportR.forEach(function(val) {
