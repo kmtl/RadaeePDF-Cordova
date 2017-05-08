@@ -130,7 +130,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener
 			mFileState = NOT_MODIFIED;
             m_view.PDFOpen(m_doc, PDFViewAct.this);
 			m_view.setReadOnly(getIntent().getBooleanExtra("READ_ONLY", false));
-            m_controller = new PDFViewController(m_layout, m_view);
+            //m_controller = new PDFViewController(m_layout, m_view);
             need_save_doc = need_save;
             if(dlg != null)
                 dlg.dismiss();
@@ -262,7 +262,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener
         {
 	        m_doc = Document.BundleRestore(savedInstanceState);//restore Document object
         	m_view.PDFOpen(m_doc, this);
-    		m_controller = new PDFViewController(m_layout, m_view);
+    		//m_controller = new PDFViewController(m_layout, m_view);
     		need_save_doc = true;
         }
     	m_view.BundleRestorePos(savedInstanceState);

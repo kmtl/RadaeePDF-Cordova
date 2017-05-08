@@ -730,7 +730,8 @@ public class Global
 		dark_mode = false;// dark mode
 		zoomLevel = 3;
         debug_mode = false;
-		setAnnotTransparency(0x200040FF);
+        setAnnotTransparency(0x00FFFFFF);
+		//setAnnotTransparency(0x200040FF);
 	}
 
 	/**

@@ -243,7 +243,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	}
 	public void OnAnnotTapped(Annotation annot)
 	{
-	/*	switch(m_bar_status)
+		switch(m_bar_status)
 		{
 		case BAR_NONE:
 			if( annot != null )
@@ -286,7 +286,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				m_bar_status = BAR_ACT;
 			}
 			break;
-		}*/
+		}
 	}
 	public void OnBlankTapped()
 	{
