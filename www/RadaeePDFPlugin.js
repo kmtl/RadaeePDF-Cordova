@@ -10,6 +10,10 @@
 //      added config prototypes
 //  v1.2.0
 
+// modified by Nermeen Solaiman on 26/04/17
+//      added getPageCount, extractTextFromPage and encryptDocAs prototypes
+//  v1.3.0
+
 var argscheck = require('cordova/argscheck'),
     exec      = require('cordova/exec');
 
@@ -103,6 +107,31 @@ RadaeePDFPlugin.prototype.setTitleBGColor = function (params, successCallback, e
         params = params || {};
 
         exec(successCallback, errorCallback, 'RadaeePDFPlugin', 'setTitleBGColor', [params]);
+};
+
+RadaeePDFPlugin.prototype.setToolbarEnabled = function(params, successCallback, errorCallback) { //iOS only
+
+        params = params || {};
+
+        exec(successCallback, errorCallback, 'RadaeePDFPlugin', 'setToolbarEnabled', [params]);
+}
+
+RadaeePDFPlugin.prototype.getPageCount = function (params, successCallback, errorCallback) {
+        params = params || {};
+
+        exec(successCallback, errorCallback, 'RadaeePDFPlugin', 'getPageCount', [params]);
+};
+
+RadaeePDFPlugin.prototype.extractTextFromPage = function (params, successCallback, errorCallback) {
+        params = params || {};
+
+        exec(successCallback, errorCallback, 'RadaeePDFPlugin', 'extractTextFromPage', [params]);
+};
+
+RadaeePDFPlugin.prototype.encryptDocAs = function (params, successCallback, errorCallback) {
+        params = params || {};
+
+        exec(successCallback, errorCallback, 'RadaeePDFPlugin', 'encryptDocAs', [params]);
 };
 
 module.exports = new RadaeePDFPlugin();
