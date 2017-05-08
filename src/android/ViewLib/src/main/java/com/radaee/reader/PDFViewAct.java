@@ -345,8 +345,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener
 	@Override
 	public void OnPDFAnnotTapped(VPage vpage, Annotation annot)
 	{
-		if(m_controller != null)
-			m_controller.OnAnnotTapped(annot);
+		m_view.PDFPerformAnnot(annot);
 	}
 	@Override
 	public void OnPDFBlankTapped()

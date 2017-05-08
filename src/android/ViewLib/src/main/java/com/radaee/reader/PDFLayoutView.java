@@ -227,7 +227,7 @@ public class PDFLayoutView extends View implements LayoutListener
 					}
 					else if( m_doc.CanSave() && m_annot.GetEditType() > 0 )//if form edit-box.
 					{
-						onEditAnnot();
+						//onEditAnnot();
                         /*
                         int[] location = new int[2];
                         getLocationOnScreen(location);
@@ -1759,8 +1759,9 @@ public class PDFLayoutView extends View implements LayoutListener
 		AlertDialog dlg = builder.create();
 		dlg.show();
 	}
-	public void PDFPerformAnnot()
+	public void PDFPerformAnnot(Annotation annot)
 	{
+		if( m_annot == null ) m_annot = annot;
 		if( m_status != STA_ANNOT ) return;
 		Page page = m_doc.GetPage(m_annot_page.GetPageNo());
 		if( page == null || m_annot == null ) return;

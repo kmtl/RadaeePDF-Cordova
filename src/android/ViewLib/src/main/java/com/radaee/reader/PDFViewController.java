@@ -683,7 +683,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		}
 		else if( arg0 == btn_act_perform )
 		{
-			m_view.PDFPerformAnnot();
+			m_view.PDFPerformAnnot(null);
 			m_bar_act.BarSwitch(m_bar_cmd);
 
 			if(mNavigationMode == NAVIGATION_THUMBS)
