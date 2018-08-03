@@ -13,8 +13,10 @@ import android.print.PrintDocumentAdapter;
 import android.print.PrintDocumentInfo;
 import android.print.PrintManager;
 import android.text.TextUtils;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
@@ -22,12 +24,15 @@ import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import com.radaee.pdf.Global;
 import com.radaee.pdf.Page;
 import com.radaee.pdf.Page.Annotation;
+import com.radaee.util.BookmarkHandler;
 import com.radaee.util.CommonUtil;
 import com.radaee.util.PDFThumbView;
+import com.radaee.util.RadaeePDFManager;
 import com.radaee.util.RadaeePluginCallback;
 import com.radaee.view.PDFViewThumb;
 import com.radaee.viewlib.R;
@@ -36,11 +41,13 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.text.Bidi;
+import java.util.Locale;
 
 public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChangeListener
 {
@@ -48,6 +55,10 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	{
 		public void OnCtrlSelect(boolean set);
 	}
+	static final public int NOT_MODIFIED = 0;
+	static final public int MODIFIED_NOT_SAVED = 1;
+	static final public int MODIFIED_AND_SAVED = 2;
+	static private int sFileState = NOT_MODIFIED;
 	static public final int BAR_NONE = 0;
 	static public final int BAR_CMD = 1;
 	static public final int BAR_ANNOT = 2;
@@ -66,6 +77,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	private PDFBotBar m_bar_seek;
 	private PDFBotBar m_thumb_view;
 	private PDFMenu   m_menu_view;
+	private PDFMenu   m_menu_more;
 	private ImageView btn_view;
 	private ImageView btn_find;
 	private ImageView btn_annot;
@@ -73,7 +85,11 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
     private ImageView btn_outline;
     private ImageView btn_undo;
     private ImageView btn_redo;
-    private ImageView btn_print;
+    private ImageView btn_more;
+    private View btn_add_bookmark;
+    private View btn_show_bookmarks;
+    private View btn_save;
+    private View btn_print;
 	private ImageView btn_find_back;
 	private ImageView btn_find_prev;
 	private ImageView btn_find_next;
@@ -92,6 +108,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	private SeekBar seek_page;
 	private TextView lab_page;
 	private View	view_vert;
+	private View	view_horz;
 	private View	view_single;
 	private View	view_dual;
 	private boolean m_set = false;
@@ -101,11 +118,13 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	{
 		m_parent = parent;
 		m_view = view;
+		sFileState = NOT_MODIFIED;
 		m_bar_act = new PDFTopBar(m_parent, R.layout.bar_act);
 		m_bar_cmd = new PDFTopBar(m_parent, R.layout.bar_cmd);
 		m_bar_find = new PDFTopBar(m_parent, R.layout.bar_find);
 		m_bar_annot = new PDFTopBar(m_parent, R.layout.bar_annot);
-		m_menu_view = new PDFMenu(m_parent, R.layout.pop_view);
+		m_menu_view = new PDFMenu(m_parent, R.layout.pop_view, 160, 180);
+		m_menu_more = new PDFMenu(m_parent, R.layout.pop_more, 180,180);
 		RelativeLayout layout = (RelativeLayout)m_bar_cmd.BarGetView();
 		btn_view = (ImageView)layout.findViewById(R.id.btn_view);
 		btn_find = (ImageView)layout.findViewById(R.id.btn_find);
@@ -114,7 +133,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
         btn_outline = (ImageView)layout.findViewById(R.id.btn_outline);
         btn_undo = (ImageView)layout.findViewById(R.id.btn_undo);
         btn_redo = (ImageView)layout.findViewById(R.id.btn_redo);
-        btn_print = (ImageView)layout.findViewById(R.id.btn_print);
+        btn_more = (ImageView)layout.findViewById(R.id.btn_more);
 		layout = (RelativeLayout)m_bar_find.BarGetView();
 		btn_find_back = (ImageView)layout.findViewById(R.id.btn_back);
 		btn_find_prev = (ImageView)layout.findViewById(R.id.btn_left);
@@ -135,8 +154,14 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		btn_annot_note = (ImageView)layout.findViewById(R.id.btn_annot_note);
 		LinearLayout layout1 = (LinearLayout)m_menu_view.MenuGetView();
 		view_vert = layout1.findViewById(R.id.view_vert);
+		view_horz = layout1.findViewById(R.id.view_horz);
 		view_single = layout1.findViewById(R.id.view_single);
 		view_dual = layout1.findViewById(R.id.view_dual);
+		LinearLayout moreLayout = (LinearLayout)m_menu_more.MenuGetView();
+		btn_save = moreLayout.findViewById(R.id.save);
+		btn_print = moreLayout.findViewById(R.id.print);
+		btn_add_bookmark = moreLayout.findViewById(R.id.add_bookmark);
+		btn_show_bookmarks = moreLayout.findViewById(R.id.show_bookmarks);
 
 		btn_view.setOnClickListener(this);
 		btn_find.setOnClickListener(this);
@@ -145,7 +170,11 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
         btn_outline.setOnClickListener(this);
         btn_undo.setOnClickListener(this);
         btn_redo.setOnClickListener(this);
+        btn_more.setOnClickListener(this);
+        btn_save.setOnClickListener(this);
         btn_print.setOnClickListener(this);
+        btn_add_bookmark.setOnClickListener(this);
+        btn_show_bookmarks.setOnClickListener(this);
 		btn_find_back.setOnClickListener(this);
 		btn_find_prev.setOnClickListener(this);
 		btn_find_next.setOnClickListener(this);
@@ -161,9 +190,11 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		btn_annot_stamp.setOnClickListener(this);
 		btn_annot_note.setOnClickListener(this);
 		view_vert.setOnClickListener(this);
+		view_horz.setOnClickListener(this);
 		view_single.setOnClickListener(this);
 		view_dual.setOnClickListener(this);
 		SetBtnEnabled(btn_annot, m_view.PDFCanSave());
+		SetBtnEnabled(btn_save, m_view.PDFCanSave());
 		SetBtnEnabled(btn_print, m_view.PDFCanSave());
 
 		//Nermeen, show/hide buttons based on license type
@@ -182,6 +213,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			btn_redo.setVisibility(View.GONE);
 		}
 		RadaeePluginCallback.getInstance().setControllerListener(mControllerListner);
+		BookmarkHandler.setDbPath(m_parent.getContext().getFilesDir() + File.separator + "Bookmarks.db");
 
 		if(Build.VERSION.SDK_INT < Build.VERSION_CODES.KITKAT)
 			btn_print.setVisibility(View.GONE);
@@ -196,7 +228,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				public void OnPageClicked(int pageno) {
 					m_view.PDFGotoPage(pageno);
 				}
-			}, false);
+			}, Global.rtol);
 		} else if(mNavigationMode == NAVIGATION_SEEK) {
 			m_bar_seek = new PDFBotBar(m_parent, R.layout.bar_seek);
 			layout = (RelativeLayout)m_bar_seek.BarGetView();
@@ -206,8 +238,48 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			seek_page.setOnSeekBarChangeListener(this);
 			seek_page.setMax(m_view.PDFGetDoc().GetPageCount() - 1);
 		}
+
+		if(edit_find != null) {
+			edit_find.setOnEditorActionListener(new TextView.OnEditorActionListener() {
+				@Override
+				public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
+					if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+						activateSearch(1);
+						return true;
+					}
+					return false;
+				}
+			});
+			edit_find.setOnFocusChangeListener(new View.OnFocusChangeListener() {
+				@Override
+				public void onFocusChange(View v, boolean hasFocus) {
+					if(hasFocus) {
+						InputMethodManager imm = (InputMethodManager) v.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+						imm.showSoftInput(v, InputMethodManager.SHOW_IMPLICIT);
+					}
+				}
+			});
+		}
+
+		btn_save.setVisibility(RadaeePDFManager.sHideSaveButton ? View.GONE : View.VISIBLE);
+		btn_more.setVisibility(RadaeePDFManager.sHideMoreButton ? View.GONE : View.VISIBLE);
+		btn_undo.setVisibility(RadaeePDFManager.sHideUndoButton ? View.GONE : View.VISIBLE);
+		btn_redo.setVisibility(RadaeePDFManager.sHideRedoButton ? View.GONE : View.VISIBLE);
+		btn_print.setVisibility(RadaeePDFManager.sHidePrintButton ? View.GONE : View.VISIBLE);
+		btn_annot.setVisibility(RadaeePDFManager.sHideAnnotButton ? View.GONE : View.VISIBLE);
+		btn_find.setVisibility(RadaeePDFManager.sHideSearchButton ? View.GONE : View.VISIBLE);
+		btn_select.setVisibility(RadaeePDFManager.sHideSelectButton ? View.GONE : View.VISIBLE);
+		btn_view.setVisibility(RadaeePDFManager.sHideViewModeButton ? View.GONE : View.VISIBLE);
+		btn_outline.setVisibility(RadaeePDFManager.sHideOutlineButton ? View.GONE : View.VISIBLE);
+		btn_add_bookmark.setVisibility(RadaeePDFManager.sHideAddBookmarkButton ? View.GONE : View.VISIBLE);
+		btn_show_bookmarks.setVisibility(RadaeePDFManager.sHideShowBookmarksButton ? View.GONE : View.VISIBLE);
 	}
-	private void SetBtnEnabled(ImageView btn, boolean enable)
+
+	public static int getFileState() {
+		return sFileState;
+	}
+
+	private void SetBtnEnabled(View btn, boolean enable)
 	{
 		if(enable)
 		{
@@ -307,6 +379,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			break;
 		case BAR_CMD:
 			m_menu_view.MenuDismiss();
+			m_menu_more.MenuDismiss();
 			m_bar_cmd.BarHide();
 
 			if(mNavigationMode == NAVIGATION_THUMBS)
@@ -318,6 +391,8 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		case BAR_FIND:
 			m_bar_find.BarHide();
 			m_bar_status = BAR_NONE;
+			((InputMethodManager) m_parent.getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
+					.hideSoftInputFromWindow(edit_find.getWindowToken(), 0);
 			break;
 		case BAR_ANNOT:
 			m_bar_annot.BarHide();
@@ -336,7 +411,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	@Override
 	public void onProgressChanged(SeekBar arg0, int arg1, boolean arg2)
 	{
-		lab_page.setText(String.format("%d", arg0.getProgress() + 1));
+		lab_page.setText(String.format(Locale.ENGLISH, "%d", arg0.getProgress() + 1));
 	}
 	@Override
 	public void onStartTrackingTouch(SeekBar arg0)
@@ -350,10 +425,24 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 	public void OnPageChanged(int pageno)
 	{
 		if(mNavigationMode == NAVIGATION_SEEK) {
-			lab_page.setText(String.format("%d", pageno + 1));
+			lab_page.setText(String.format(Locale.ENGLISH, "%d", pageno + 1));
 			seek_page.setProgress(pageno);
 		} else if(mNavigationMode == NAVIGATION_THUMBS)
 			mThumbView.thumbGotoPage(pageno);
+	}
+
+	public void onPageModified(int pageno) {
+		sFileState = MODIFIED_NOT_SAVED;
+		if(mNavigationMode == NAVIGATION_THUMBS)
+			mThumbView.thumbUpdatePage(pageno);
+	}
+
+	public void onConfigChanged() {
+		if(m_bar_status == BAR_ACT) {
+			m_view.PDFCancelAnnot();
+			m_bar_act.BarHide();
+			m_bar_status = BAR_NONE;
+		}
 	}
 	public boolean OnBackPressed()
 	{
@@ -369,6 +458,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		case BAR_CMD:
 			if(m_set) OnSelectEnd();
 			m_menu_view.MenuDismiss();
+			m_menu_more.MenuDismiss();
 			m_bar_cmd.BarHide();
 
 			if(mNavigationMode == NAVIGATION_THUMBS)
@@ -380,6 +470,10 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		case BAR_FIND:
 			m_bar_find.BarHide();
 			m_bar_status = BAR_NONE;
+			((InputMethodManager) m_parent.getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
+					.hideSoftInputFromWindow(edit_find.getWindowToken(), 0);
+			m_find_str = null;
+			m_view.PDFFindEnd();
 			return false;
 		case BAR_ANNOT:
 			if(m_set)
@@ -400,6 +494,14 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			return false;
 		}
 	}
+
+	public void onDestroy() {
+		if( mThumbView != null ) {
+			mThumbView.thumbClose();
+			mThumbView = null;
+		}
+	}
+
 	private String m_find_str = null;
 	@Override
 	public void onClick(View arg0)
@@ -441,47 +543,27 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
         else if(arg0 == btn_redo)
         {
             m_view.PDFRedo();
-        }
-		else if(arg0 == btn_print) {
+        } else if(arg0 == btn_more) {
+			m_menu_more.MenuShow(m_view.getWidth() - m_menu_more.getWidth(), m_bar_cmd.BarGetHeight());
+		} else if(arg0 == btn_save) {
+			savePDF();
+			m_menu_more.MenuDismiss();
+		} else if(arg0 == btn_print) {
 			printPDF();
+			m_menu_more.MenuDismiss();
 		}
-		else if( arg0 == btn_find_prev )
-		{
-			String val = edit_find.getText().toString();
-			if( val != null && val.length() > 0 ) {
-				((InputMethodManager) m_parent.getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
-						.hideSoftInputFromWindow(edit_find.getWindowToken(), 0);
-				val = bidiFormatCheck(val);
-                if(val.equals(m_find_str))
-				{
-					m_view.PDFFind(-1);
-				}
-				else
-				{
-					m_find_str = val;
-					m_view.PDFFindStart(val, false, false);
-					m_view.PDFFind(-1);
-				}
-			}
+		else if(arg0 == btn_add_bookmark) {
+			addToBookmarks();
+			m_menu_more.MenuDismiss();
+		} else if(arg0 == btn_show_bookmarks) {
+			showBookmarks();
+			m_menu_more.MenuDismiss();
 		}
-		else if( arg0 == btn_find_next )
-		{
-			String val = edit_find.getText().toString();
-			if( val != null && val.length() > 0 ) {
-				((InputMethodManager) m_parent.getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
-						.hideSoftInputFromWindow(edit_find.getWindowToken(), 0);
-				val = bidiFormatCheck(val);
-				if(val.equals(m_find_str))
-				{
-					m_view.PDFFind(1);
-				}
-				else
-				{
-					m_find_str = val;
-					m_view.PDFFindStart(val, false, false);
-					m_view.PDFFind(1);
-				}
-			}
+		else if( arg0 == btn_find_prev ) {
+			activateSearch(-1);
+		}
+		else if( arg0 == btn_find_next ) {
+			activateSearch(1);
 		}
 		else if( arg0 == btn_annot )
 		{
@@ -658,6 +740,10 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			else if(mNavigationMode == NAVIGATION_SEEK)
 				m_bar_seek.BarShow();
 			m_bar_status = BAR_CMD;
+			((InputMethodManager) m_parent.getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
+					.hideSoftInputFromWindow(edit_find.getWindowToken(), 0);
+			m_find_str = null;
+			m_view.PDFFindEnd();
 		}
 		else if( arg0 == btn_act_back )
 		{
@@ -708,6 +794,11 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			m_view.PDFSetView(0);
 			m_menu_view.MenuDismiss();
 		}
+		else if( arg0 == view_horz )
+		{
+			m_view.PDFSetView(1);
+			m_menu_view.MenuDismiss();
+		}
 		else if( arg0 == view_single )
 		{
 			m_view.PDFSetView(3);
@@ -718,6 +809,28 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 			m_view.PDFSetView(6);
 			m_menu_view.MenuDismiss();
 		}
+	}
+
+	private void activateSearch(int direction) {
+		String val = edit_find.getText().toString();
+		if(!TextUtils.isEmpty(val)) {
+			((InputMethodManager) m_parent.getContext().getSystemService(Context.INPUT_METHOD_SERVICE))
+					.hideSoftInputFromWindow(edit_find.getWindowToken(), 0);
+			val = bidiFormatCheck(val);
+			if(val.equals(m_find_str))
+				m_view.PDFFind(direction);
+			else {
+				m_find_str = val;
+				m_view.PDFFindStart(val, false, false);
+				m_view.PDFFind(direction);
+			}
+		}
+	}
+
+	public void savePDF() {
+		m_view.PDFGetDoc().Save();
+		sFileState = MODIFIED_AND_SAVED;
+		Toast.makeText(m_parent.getContext(), R.string.saved_message, Toast.LENGTH_SHORT).show();
 	}
 
 	@TargetApi(Build.VERSION_CODES.KITKAT)
@@ -764,6 +877,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				try {
 					String mDocPath = m_view.PDFGetDoc().getDocPath();
 					if(!TextUtils.isEmpty(mDocPath)) {
+
 						input = new FileInputStream(mDocPath);
 						output = new FileOutputStream(destination.getFileDescriptor());
 						byte[] buf = new byte[1024];
@@ -791,7 +905,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 					callback.onWriteFailed(e.toString());
 				}
 			}
-		}, null);
+        }, null);
 	}
 
 	private String bidiFormatCheck(String input) {
@@ -822,6 +936,32 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 		return m_find_str;
 	}
 
+	private void addToBookmarks() {
+		try {
+			if(!TextUtils.isEmpty(m_view.PDFGetDoc().getDocPath())) {
+                String bookmarkLabel = m_parent.getContext().getString(R.string.bookmark_label, m_view.PDFGetCurrPage() + 1);
+				RadaeePDFManager mPDFManager = new RadaeePDFManager();
+				Toast.makeText(m_parent.getContext(), mPDFManager.addToBookmarks(m_parent.getContext(), m_view.PDFGetDoc().getDocPath(),
+						m_view.PDFGetCurrPage(), bookmarkLabel), Toast.LENGTH_SHORT).show();
+            } else
+                Toast.makeText(m_parent.getContext(), R.string.bookmark_error, Toast.LENGTH_SHORT).show();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+
+	private void showBookmarks() {
+		if(!TextUtils.isEmpty(m_view.PDFGetDoc().getDocPath()))
+			BookmarkHandler.showBookmarks(m_parent.getContext(), m_view.PDFGetDoc().getDocPath(), new BookmarkHandler.BookmarkListener() {
+				@Override
+				public void onBookmarkClickedListener(int pageno) {
+					m_view.PDFGotoPage(pageno);
+				}
+			});
+		else
+			Toast.makeText(m_parent.getContext(), R.string.bookmark_error, Toast.LENGTH_SHORT).show();
+	}
+
 	private RadaeePluginCallback.PDFControllerListener mControllerListner = new RadaeePluginCallback.PDFControllerListener() {
 
 		@Override
@@ -837,7 +977,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				btn_outline.setColorFilter(color);
 				btn_undo.setColorFilter(color);
 				btn_redo.setColorFilter(color);
-				btn_print.setColorFilter(color);
+				btn_more.setColorFilter(color);
 				btn_act_back.setColorFilter(color);
 				btn_act_edit.setColorFilter(color);
 				btn_act_perform.setColorFilter(color);
@@ -850,8 +990,13 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				btn_annot_stamp.setColorFilter(color);
 				btn_annot_note.setColorFilter(color);
 				((ImageView)view_vert.findViewById(R.id.imageView1)).setColorFilter(color);
+				((ImageView)view_horz.findViewById(R.id.horz)).setColorFilter(color);
 				((ImageView)view_single.findViewById(R.id.imageView2)).setColorFilter(color);
 				((ImageView)view_dual.findViewById(R.id.imageView3)).setColorFilter(color);
+				((ImageView)btn_add_bookmark.findViewById(R.id.add_bookmark_icon)).setColorFilter(color);
+				((ImageView)btn_show_bookmarks.findViewById(R.id.show_bookmarks_icon)).setColorFilter(color);
+				((ImageView)btn_save.findViewById(R.id.save_icon)).setColorFilter(color);
+				((ImageView)btn_print.findViewById(R.id.print_icon)).setColorFilter(color);
 			} catch (Exception e) {e.getMessage();}
 		}
 
@@ -862,6 +1007,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				m_bar_act.BarGetView().getBackground().setColorFilter(color, PorterDuff.Mode.SRC_IN);
 				m_bar_annot.BarGetView().getBackground().setColorFilter(color, PorterDuff.Mode.SRC_IN);
 				m_menu_view.MenuGetView().getBackground().setColorFilter(color, PorterDuff.Mode.SRC_IN);
+				m_menu_more.MenuGetView().getBackground().setColorFilter(color, PorterDuff.Mode.SRC_IN);
 			} catch (Exception e) {e.getMessage();}
 		}
 
@@ -888,6 +1034,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 				case BAR_CMD:
 					if(immersive) {
 						m_menu_view.MenuDismiss();
+						m_menu_more.MenuDismiss();
 						m_bar_cmd.BarHide();
 
 						if (mNavigationMode == NAVIGATION_THUMBS)
@@ -965,7 +1112,7 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
                         CommonUtil.parsePageJsonFormFields(pagesArray.getJSONObject(i), m_view.PDFGetDoc());
                     }
                     m_view.refreshCurrentPage();
-                    return "";
+                    return "property set successfully";
                 } else return "\"Pages\" attribute is missing";
             } catch (Exception e) {
                 e.printStackTrace();
@@ -989,8 +1136,21 @@ public class PDFViewController implements OnClickListener, SeekBar.OnSeekBarChan
 
 		@Override
 		public boolean onEncryptDocAs(String dst, String upswd, String opswd, int perm, int method, byte[] id) {
-			if(m_view.PDFGetDoc() == null || !m_view.PDFGetDoc().IsOpened()) return false;
-			return m_view.PDFGetDoc().EncryptAs(dst, upswd, opswd, perm, method, id);
+			return !(m_view.PDFGetDoc() == null || !m_view.PDFGetDoc().IsOpened())
+					&& m_view.PDFGetDoc().EncryptAs(dst, upswd, opswd, perm, method, id);
+		}
+
+		@Override
+		public boolean onAddAnnotAttachment(String attachmentPath) {
+			return !(m_view.PDFGetDoc() == null || !m_view.PDFGetDoc().IsOpened() || !m_view.PDFCanSave())
+					&& m_view.PDFSetAttachment(attachmentPath);
+		}
+
+		@Override
+		public String renderAnnotToFile(int page, int annotIndex, String renderPath, int bitmapWidth, int bitmapHeight) {
+			if(m_view.PDFGetDoc() == null || !m_view.PDFGetDoc().IsOpened()) return "Document not set";
+			if(page >= m_view.PDFGetDoc().GetPageCount()) return "Page index error";
+			return CommonUtil.renderAnnotToFile(m_view.PDFGetDoc(), page, annotIndex, renderPath, bitmapWidth, bitmapHeight);
 		}
 	};
 }

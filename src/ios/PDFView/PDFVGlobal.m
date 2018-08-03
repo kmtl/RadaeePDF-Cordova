@@ -87,8 +87,8 @@
 int g_def_view = 0;
 int g_render_quality;
 
-int g_MatchWholeWord;
-int g_CaseSensitive;
+bool g_MatchWholeWord;
+bool g_CaseSensitive;
 NSMutableString *pdfName;
 NSMutableString *pdfPath;
 
@@ -98,7 +98,9 @@ PDF_RENDER_MODE renderQuality = mode_normal;
 
 float g_Ink_Width = 2;
 float g_rect_Width = 2;
+float g_line_Width = 2;
 uint g_rect_color = 0xFFFF0000;
+uint g_line_color = 0xFFFF0000;
 uint g_ink_color = 0xFFFF0000;
 uint g_sel_color = 0x400000C0;
 uint g_oval_color = 0xFF0000FF;
@@ -108,6 +110,9 @@ uint annotStrikeoutColor = 0xFFFF0000;
 uint annotSquigglyColor = 0xFF00FF00;
 
 bool g_double_page_enabled = false;
+bool g_fit_signature_to_field = true;
+
+NSString *g_author = @"";
 
 void APP_Init()
 {
@@ -163,33 +168,33 @@ void APP_Init()
     Global_setCMYKProfile([cmyk_path UTF8String]);
 
     NSString *fpath;
-    fpath = [[NSBundle mainBundle] pathForResource:@"00" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res00" ofType:nil];
     Global_loadStdFont( 0, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"01" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res01" ofType:nil];
     Global_loadStdFont( 1, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"02" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res02" ofType:nil];
     Global_loadStdFont( 2, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"03" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res03" ofType:nil];
     Global_loadStdFont( 3, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"04" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res04" ofType:nil];
     Global_loadStdFont( 4, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"05" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res05" ofType:nil];
     Global_loadStdFont( 5, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"06" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res06" ofType:nil];
     Global_loadStdFont( 6, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"07" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res07" ofType:nil];
     Global_loadStdFont( 7, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"08" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res08" ofType:nil];
     Global_loadStdFont( 8, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"09" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res09" ofType:nil];
     Global_loadStdFont( 9, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"10" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res10" ofType:nil];
     Global_loadStdFont( 10, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"11" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res11" ofType:nil];
     Global_loadStdFont( 11, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"12" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res12" ofType:nil];
     Global_loadStdFont( 12, [fpath UTF8String] );
-    fpath = [[NSBundle mainBundle] pathForResource:@"13" ofType:nil];
+    fpath = [[NSBundle mainBundle] pathForResource:@"res13" ofType:nil];
     Global_loadStdFont( 13, [fpath UTF8String] );
     
     Global_fontfileListStart();

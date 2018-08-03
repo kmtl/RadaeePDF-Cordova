@@ -7,12 +7,17 @@
 //
 
 #import "RDPDFViewController.h"
-#import "PopupMenu.h"
 #import "ViewModeTableViewController.h"
+#import "RDExtendedSearch.h"
+#import "SearchResultTableViewController.h"
+#import <AVKit/AVKit.h>
+#import "ViewModeTableViewController.h"
+#import "DrawModeTableViewController.h"
+#import "SignatureViewController.h"
 
 #define SYS_VERSION [[[UIDevice currentDevice]systemVersion] floatValue]
 
-@interface RDPDFViewController () <UIPickerViewDataSource,UIPickerViewDelegate,UITextFieldDelegate,ViewModeDelegate>
+@interface RDPDFViewController () <UIPickerViewDataSource,UIPickerViewDelegate,UITextFieldDelegate,ViewModeDelegate,SearchResultViewControllerDelegate,RDAnnotListViewControllerDelegate, RDMoreTableViewControllerDelegate, SignatureDelegate, DrawModeDelegate>
 {
     UIPickerView *pickerView;
     NSArray *pickViewArr;
@@ -20,25 +25,22 @@
     int selectItem;
     UITextField *textFd;
 	UIPopoverController *bookmarkPopover;
-    UIPopoverController *viewModePopover;
     NSString *password;
     UIBarButtonItem *addBookMarkListButton;
+    UIBarButtonItem *moreBarButton;
+    
+    RDMoreTableViewController *moreTVContainer;
+    BookmarkTableViewController *b;
+    CGPoint annotTapped;
+    RDAnnotListViewController *annotListTV;
+    
+    BOOL autoSave;
 }
 
 @end
 
 @implementation RDPDFViewController
-@synthesize m_searchBar;
-@synthesize drawLineToolBar;
-@synthesize drawRectToolBar;
-@synthesize toolBar;
-@synthesize searchToolBar;
-@synthesize window = _window;
-@synthesize sliderBar;
-@synthesize pageNumLabel;
-@synthesize pagenow;
-@synthesize pagecount;
-@synthesize  b_keyboard;
+
 extern int g_PDF_ViewMode;
 extern float g_Ink_Width;
 extern float g_swipe_speed;
@@ -56,20 +58,26 @@ extern uint g_ink_color;
 extern uint g_rect_color;
 extern uint g_ellipse_color;
 bool b_outline;
+bool b_search_outline;
 extern uint g_oval_color;
 
-- (void)toolbarStyle
+- (CGRect)getReaderBounds
+{
+    return [[UIScreen mainScreen] bounds];
+}
+
+- (void)_toolBarStyle
 {
     defaultTranslucent = self.navigationController.navigationBar.isTranslucent;
     [self.navigationController.navigationBar setTranslucent:YES];
     
     //set style
-    //toolBar.barStyle = searchToolBar.barStyle = m_searchBar.barStyle = annotToolBar.barStyle = drawLineToolBar.barStyle = drawRectToolBar.barStyle = self.navigationController.navigationBar.barStyle = UIBarStyleBlackTranslucent;
+    //_toolBar.barStyle = _searchToolBar.barStyle = _m_searchBar.barStyle = annotToolBar.barStyle = _drawLineToolBar.barStyle = _drawRectToolBar.barStyle = self.navigationController.navigationBar.barStyle = UIBarStyleBlackTranslucent;
     
     //set tint
-    toolBar.tintColor = searchToolBar.tintColor = m_searchBar.tintColor = annotToolBar.tintColor = drawLineToolBar.tintColor = drawRectToolBar.tintColor = m_slider.tintColor = self.navigationController.navigationBar.tintColor;
+    _toolBar.tintColor = _searchToolBar.tintColor = _m_searchBar.tintColor = annotToolBar.tintColor = _drawLineToolBar.tintColor = _drawRectToolBar.tintColor = m_slider.tintColor = self.navigationController.navigationBar.tintColor;
     
-    toolBar.barTintColor = searchToolBar.barTintColor = m_searchBar.barTintColor = annotToolBar.barTintColor = drawLineToolBar.barTintColor = drawRectToolBar.barTintColor = self.navigationController.navigationBar.barTintColor;
+    _toolBar.barTintColor = _searchToolBar.barTintColor = _m_searchBar.barTintColor = annotToolBar.barTintColor = _drawLineToolBar.barTintColor = _drawRectToolBar.barTintColor = self.navigationController.navigationBar.barTintColor;
 }
 
 //---------------------------------------------------------
@@ -77,7 +85,7 @@ extern uint g_oval_color;
  Author: Emanuele
  Date last update: 01/12/16
  Note: Aggiunta la possibilità di nascondere le icone della
-        toolbar
+        _toolBar
  */
 //---------------------------------------------------------
 
@@ -86,15 +94,10 @@ extern uint g_oval_color;
     BOOL isActive = [[NSUserDefaults standardUserDefaults] boolForKey:@"actIsActive"];
     int licenseType = [[[NSUserDefaults standardUserDefaults] objectForKey:@"actActivationType"] intValue];
     
-    UIBarButtonItem *viewModeButton;
+    UIBarButtonItem *closeButton = [[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"btn_back"] style:UIBarButtonItemStylePlain target:self action:@selector(closeView)];
     
-    if (_viewModeImage) {
-        viewModeButton = [[UIBarButtonItem alloc] initWithImage:_viewModeImage style:UIBarButtonItemStylePlain target:self action:@selector(showViewModeTableView)];
-    }
-    else
-    {
-        viewModeButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemOrganize target:self action:@selector(showViewModeTableView)];
-    }
+    _viewModeButton = [[UIBarButtonItem alloc]initWithImage:[UIImage imageNamed:@"btn_view.png"] style:UIBarButtonItemStylePlain target:self action:@selector(showViewModeTableView)];
+    _viewModeButton.width =30;
     
     UIBarButtonItem *searchButton;
     
@@ -108,61 +111,11 @@ extern uint g_oval_color;
     
     searchButton.width =30;
     
+    _drawButton = [[UIBarButtonItem alloc]initWithImage:[UIImage imageNamed:@"btn_ink.png"] style:UIBarButtonItemStylePlain target:self action:@selector(showDrawModeTableView)];
+    _drawButton.width =30;
     
-    UIBarButtonItem *lineButton=[[UIBarButtonItem alloc]initWithImage:_lineImage style:UIBarButtonItemStylePlain target:self action:@selector(drawLine:)];
-    lineButton.width =30;
-    
-    UIBarButtonItem *rectButton=[[UIBarButtonItem alloc]initWithImage:_rectImage style:UIBarButtonItemStylePlain target:self action:@selector(drawRect:)];
-    rectButton.width =30;
-
-    UIBarButtonItem *circleButton=[[UIBarButtonItem alloc]initWithImage:_ellipseImage style:UIBarButtonItemStylePlain target:self action:@selector(drawEllipse:)];
-    circleButton.width =30;
-    
-    UIBarButtonItem *addBookMarkButton;
-    
-    if (_bookmarkImage) {
-        addBookMarkButton = [[UIBarButtonItem alloc] initWithImage:_bookmarkImage style:UIBarButtonItemStylePlain target:self action:@selector(composeFile:)];
-    }
-    else
-    {
-        addBookMarkButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemAdd target:self action:@selector(composeFile:)];
-    }
-    
-    addBookMarkButton.width =30;
-    
-    if (_bookmarkListImage) {
-        addBookMarkListButton = [[UIBarButtonItem alloc] initWithImage:_bookmarkListImage style:UIBarButtonItemStylePlain target:self action:@selector(bookmarkList)];
-    }
-    else
-    {
-        addBookMarkListButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemBookmarks target:self action:@selector(bookmarkList)];
-    }
-    
-    addBookMarkListButton.width =30;
-    
-    UIBarButtonItem *viewMenuButton;
-    
-    if (_outlineImage) {
-        viewMenuButton = [[UIBarButtonItem alloc] initWithImage:_outlineImage style:UIBarButtonItemStylePlain target:self action:@selector(viewMenu:)];
-    }
-    else
-    {
-        viewMenuButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemOrganize target:self action:@selector(viewMenu:)];
-    }
-    
-    viewMenuButton.width =30;
-    
-    UIBarButtonItem *printButton;
-    
-    if (_printImage) {
-        printButton = [[UIBarButtonItem alloc] initWithImage:_printImage style:UIBarButtonItemStylePlain target:self action:@selector(printPdf)];
-    }
-    else
-    {
-        printButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemPlay target:self action:@selector(printPdf)];
-    }
-    
-    printButton.width =30;
+    _selButton =[[UIBarButtonItem alloc] initWithImage:[UIImage imageNamed:@"btn_select"] style:UIBarButtonItemStylePlain target:self action:@selector(toggleSelection)];
+    _selButton.width = 30;
     
     UIBarButtonItem *gridButton;
     
@@ -176,14 +129,30 @@ extern uint g_oval_color;
     
     gridButton.width =30;
     
-    NSMutableArray *hiddenItems = [NSMutableArray arrayWithObjects:[NSNumber numberWithBool:_hideViewModeImage], [NSNumber numberWithBool:_hideSearchImage], [NSNumber numberWithBool:_hideLineImage], [NSNumber numberWithBool:_hideRectImage], [NSNumber numberWithBool:_hideEllipseImage], [NSNumber numberWithBool:_hideBookmarkImage], [NSNumber numberWithBool:_hideBookmarkListImage], [NSNumber numberWithBool:_hideOutlineImage], [NSNumber numberWithBool:_hidePrintImage], [NSNumber numberWithBool:_hideGridImage], nil];
+    UIBarButtonItem *viewMenuButton;
     
-    NSMutableArray *toolbarItem = [[NSMutableArray alloc] initWithObjects:viewModeButton, searchButton, lineButton, rectButton, circleButton, addBookMarkButton, addBookMarkListButton, viewMenuButton, printButton, gridButton,nil];
+    if (_outlineImage) {
+        viewMenuButton = [[UIBarButtonItem alloc] initWithImage:_outlineImage style:UIBarButtonItemStylePlain target:self action:@selector(viewMenu:)];
+    }
+    else
+    {
+        viewMenuButton = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemOrganize target:self action:@selector(viewMenu:)];
+    }
+    
+    UIBarButtonItem *undoButton=[[UIBarButtonItem alloc]initWithImage:_undoImage style:UIBarButtonItemStylePlain target:self action:@selector(undoAnnot)];
+    undoButton.width =30;
+    
+    UIBarButtonItem *redoButton=[[UIBarButtonItem alloc]initWithImage:_redoImage style:UIBarButtonItemStylePlain target:self action:@selector(redoAnnot)];
+    redoButton.width =30;
+    
+    _moreButton = [[UIBarButtonItem alloc] initWithImage:_moreImage style:UIBarButtonItemStylePlain target:self action:@selector(showMoreButtons)];
+    
+    NSMutableArray *hiddenItems = [NSMutableArray arrayWithObjects: [NSNumber numberWithBool:_hideViewModeImage], [NSNumber numberWithBool:_hideSearchImage], [NSNumber numberWithBool:_hideDrawImage], [NSNumber numberWithBool:_hideSelImage], [NSNumber numberWithBool:_hideOutlineImage], [NSNumber numberWithBool:_hideGridImage], [NSNumber numberWithBool:_hideUndoImage], [NSNumber numberWithBool:_hideRedoImage], [NSNumber numberWithBool:NO], [NSNumber numberWithBool:_hideMoreImage], nil];
+    
+    NSMutableArray *_toolBarItem = [[NSMutableArray alloc] initWithObjects:_viewModeButton, searchButton, _drawButton, _selButton, viewMenuButton, gridButton, undoButton, redoButton, [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemFlexibleSpace target:nil action:nil], _moreButton, nil];
     
     if (!isActive || licenseType < 1) {
-        [hiddenItems setObject:[NSNumber numberWithBool:YES] atIndexedSubscript:2];
         [hiddenItems setObject:[NSNumber numberWithBool:YES] atIndexedSubscript:3];
-        [hiddenItems setObject:[NSNumber numberWithBool:YES] atIndexedSubscript:4];
 
         if (!isActive) {
             [hiddenItems setObject:[NSNumber numberWithBool:YES] atIndexedSubscript:1];
@@ -193,13 +162,113 @@ extern uint g_oval_color;
     NSMutableArray *objectsToRemove = [NSMutableArray array];
     for (int i = 0; i < hiddenItems.count; i++) {
         if ([[hiddenItems objectAtIndex:i] boolValue]) {
-            [objectsToRemove addObject:[toolbarItem objectAtIndex:i]];
+            [objectsToRemove addObject:[_toolBarItem objectAtIndex:i]];
         }
     }
     
-    [toolbarItem removeObjectsInArray:objectsToRemove];
+    [_toolBarItem removeObjectsInArray:objectsToRemove];
+    [_toolBarItem insertObject:closeButton atIndex:0];
     
-    [toolBar setItems:toolbarItem animated:NO];
+    [_toolBar setItems:_toolBarItem animated:NO];
+}
+
+-(void)showMoreButtons{
+    if (m_bSel == true)
+    {
+        [m_view vSelEnd];
+        m_bSel = false;
+    }
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPhone){
+        
+        _moreItemsContainer = [UIAlertController
+                               alertControllerWithTitle:@"Select Action"
+                               message:@""
+                               preferredStyle:UIAlertControllerStyleActionSheet];
+        
+        UIAlertAction *addBookMark = [UIAlertAction actionWithTitle:@"Add book mark" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+                                      {
+                                          [self composeFile:nil];
+                                      }];
+        
+        UIAlertAction *bookMarkList = [UIAlertAction actionWithTitle:@"Book mark list" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+                                       {
+                                           [self bookmarkList];
+                                       }];
+        
+        UIAlertAction *viewMenu =  [UIAlertAction actionWithTitle:@"TOC" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+                                    {
+                                        [self viewMenu:nil];
+                                    }];
+        
+        UIAlertAction *savePDF = [UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+                                  {
+                                      [self savePdf];
+                                  }];
+        
+        UIAlertAction *printPDF =  [UIAlertAction actionWithTitle:@"Print" style:UIAlertActionStyleDefault handler:^(UIAlertAction * action)
+                                    {
+                                        [self printPdf];
+                                    }];
+        
+        UIAlertAction *cancel =  [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction * action)
+                                  {
+                                      [_moreItemsContainer dismissViewControllerAnimated:YES completion:nil];
+                                  }];
+        
+        [addBookMark setValue:[[UIImage imageNamed:@"btn_add"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        [bookMarkList setValue:[[UIImage imageNamed:@"btn_show"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        [viewMenu setValue:[[UIImage imageNamed:@"btn_outline"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        [savePDF setValue:[[UIImage imageNamed:@"btn_save"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        [printPDF setValue:[[UIImage imageNamed:@"btn_print"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        [_moreItemsContainer addAction:addBookMark];
+        [_moreItemsContainer addAction:bookMarkList];
+        [_moreItemsContainer addAction:viewMenu];
+        [_moreItemsContainer addAction:savePDF];
+        [_moreItemsContainer addAction:printPDF];
+        [_moreItemsContainer addAction:cancel];
+        
+        [self presentViewController:_moreItemsContainer animated:YES completion:nil];
+    }
+    else
+    {
+        moreTVContainer = [[RDMoreTableViewController alloc] init];
+        moreTVContainer.modalPresentationStyle = UIModalPresentationPopover;
+        [moreTVContainer setPreferredContentSize:CGSizeMake(300, 44 * 5)];
+        moreTVContainer.delegate = self;
+        UIPopoverPresentationController *popPresenter = [moreTVContainer
+                                                         popoverPresentationController];
+        popPresenter.barButtonItem = _moreButton;
+        popPresenter.permittedArrowDirections = UIPopoverArrowDirectionAny;
+        [self presentViewController:moreTVContainer animated:YES completion:nil];
+    }
+    
+}
+
+-(void) selectAction: (int) type
+{
+    [moreTVContainer dismissViewControllerAnimated:YES completion:nil];
+ 
+    switch (type) {
+        case 0:
+            [self composeFile:nil];
+            break;
+        case 1:
+            [self bookmarkList];
+            break;
+        case 2:
+            [self viewMenu:nil];
+            break;
+        case 3:
+            [self savePdf];
+            break;
+        case 4:
+            [self printPdf];
+            break;
+            
+        default:
+            break;
+    }
 }
 
 - (id)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil
@@ -215,9 +284,6 @@ extern uint g_oval_color;
 {
     [super viewDidLoad];
     
-    BOOL isActive = [[NSUserDefaults standardUserDefaults] boolForKey:@"actIsActive"];
-    int licenseType = [[[NSUserDefaults standardUserDefaults] objectForKey:@"actActivationType"] intValue];
-    
     PDFannot = [[PDFAnnot alloc] init];
     b_outline = false;
     b_findStart = NO;
@@ -226,46 +292,27 @@ extern uint g_oval_color;
     b_sigleTap =false;
     b_keyboard = false;
     statusBarHidden = NO;
-    popupMenu1 = [[PopupMenu alloc] init];
+    alreadySelected = NO;
     tempfiles = [[NSMutableArray alloc]init];
     
     if ([self respondsToSelector:@selector(automaticallyAdjustsScrollViewInsets)]) {
         self.automaticallyAdjustsScrollViewInsets = NO;
     }
-    
-    PopupMenuItem *item1 = [PopupMenuItem itemWithTitle:@"Copy" image:nil target:self action:@selector(Copy:)];
-    item1.width = 40;
-    
-    PopupMenuItem *item2 = [PopupMenuItem itemWithTitle:@"Mark" image:nil target:self action:@selector(Mark:)];
-    item2.width = 40;
-    
-    PopupMenuItem *item3 = [PopupMenuItem itemWithTitle:@"STO" image:nil target:self action:@selector(StrikeOut:)];
-    item3.width =40;
-    PopupMenuItem *item4 = [PopupMenuItem itemWithTitle:@"HL" image:nil target:self action:@selector(HighLight:)];
-    item4.width=40;
-    PopupMenuItem *item5 = [PopupMenuItem itemWithTitle:@"UDL" image:nil target:self action:@selector(UnderLine:)];
-    item5.width =40;
-    PopupMenuItem *item6 = [PopupMenuItem itemWithTitle:@"TA" image:nil target:self action:@selector(TextAnnot:)];
-    item6.width = 40;
-    
-    if (!isActive || licenseType < 1) {
-        item2 = item3 = item4 = item5 = item6 = nil;
-    }
-    
-    popupMenu1.items = [NSArray arrayWithObjects:item1,item5,item4,item3,item6,nil];
 
     m_bSel = false;
-    float width = [UIScreen mainScreen].bounds.size.width;
-    pickerView = [[UIPickerView alloc] initWithFrame:CGRectMake(0, [UIScreen mainScreen].bounds.size.height - 160, width, 60)];
+    pickerView = [[UIPickerView alloc] initWithFrame:CGRectMake(0, self.view.frame.size.height - 60, self.view.frame.size.width, 60)];
+    pickerView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleRightMargin;
     pickerView.delegate = self;
     pickerView.dataSource = self;
     pickerView.backgroundColor = [UIColor lightGrayColor];
+    
     [self.view addSubview:pickerView];
     [self.view bringSubviewToFront:pickerView];
     //pickerView.hidden = YES;
     
     confirmPickerBtn = [UIButton buttonWithType:UIButtonTypeCustom];
-    confirmPickerBtn.frame = CGRectMake(width - 60, pickerView.frame.origin.y - 40, 60, 40);
+    confirmPickerBtn.frame = CGRectMake(self.view.frame.size.width - 60, pickerView.frame.origin.y - 40, 60, 40);
+    confirmPickerBtn.autoresizingMask = UIViewAutoresizingFlexibleTopMargin | UIViewAutoresizingFlexibleLeftMargin;
     [confirmPickerBtn setTitle:@"OK" forState:UIControlStateNormal];
     confirmPickerBtn.hidden = YES;
     [confirmPickerBtn setTitleColor:[UIColor blueColor] forState:UIControlStateNormal];
@@ -282,28 +329,31 @@ extern uint g_oval_color;
 }
 -(void)viewWillAppear:(BOOL)animated
 {
+    if (SEARCH_LIST == 1 && b_search_outline == YES) {
+        b_search_outline = NO;
+        return;
+    }
+    
     if (_delegate) {
         [_delegate willShowReader];
     }
     
-    toolBar = [UIToolbar new];
-    [toolBar sizeToFit];
+    _toolBar = [UIToolbar new];
+    [_toolBar setFrame:CGRectMake(0, 0, self.navigationController.navigationBar.frame.size.width, self.navigationController.navigationBar.frame.size.height)];
     b_findStart = NO;
-	[self createToolbarItems];
-    self.navigationItem.titleView =toolBar;
+    [self createToolbarItems];
+    [self.navigationController.navigationBar addSubview:_toolBar];
     
-    [pageNumLabel setFrame:CGRectMake(0, 20+self.navigationController.navigationBar.frame.size.height+1, 65, 30)];
+    [_pageNumLabel setFrame:CGRectMake(0, 20+self.navigationController.navigationBar.frame.size.height+1, 65, 30)];
     
-    [self toolbarStyle];
-    
-    //GEAR
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(moviePlayedDidFinish:) name:MPMoviePlayerPlaybackDidFinishNotification object:nil];
-    //END
+    [self _toolBarStyle];
 }
 
 - (void)viewDidAppear:(BOOL)animated
 {
     [super viewDidAppear:animated];
+    
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(refreshCurrentPage) name:@"Radaee-Refresh-Page" object:nil];
     
     if (_delegate) {
         [_delegate didShowReader];
@@ -351,12 +401,15 @@ extern uint g_oval_color;
         if (_delegate) {
             [_delegate didCloseReader];
         }
+        
+        [[NSNotificationCenter defaultCenter] removeObserver:self name:@"Radaee-Refresh-Page" object:nil];
     }
 }
 
 - (void)closeView
 {
-    if ([m_view isModified]) {
+    if ([m_view isModified] && !autoSave) {
+        
         UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Exiting"
                                                                        message:@"Document modified.\r\nDo you want to save it?"
                                                                 preferredStyle:UIAlertControllerStyleAlert];
@@ -399,8 +452,8 @@ extern uint g_oval_color;
 
 - (void)bookmarkList
 {
-    BookmarkTableViewController *b = [[BookmarkTableViewController alloc] init];
-    b.items = [RadaeePDFPlugin loadBookmarkForPdf:[pdfName substringToIndex:pdfName.length-4]];
+    b = [[BookmarkTableViewController alloc] init];
+    b.items = [RadaeePDFPlugin loadBookmarkForPdf:pdfPath withPath:YES];
     b.delegate = self;
     
     if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
@@ -408,7 +461,7 @@ extern uint g_oval_color;
         bookmarkPopover = [[UIPopoverController alloc] initWithContentViewController:b];
         bookmarkPopover.popoverContentSize = CGSizeMake(300, 44 * b.items.count);
         
-        [bookmarkPopover presentPopoverFromBarButtonItem:addBookMarkListButton permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+        [bookmarkPopover presentPopoverFromBarButtonItem:_moreButton permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
     }
     else
     {
@@ -418,54 +471,38 @@ extern uint g_oval_color;
     }
 }
 
+-(void)didSelectItem:(int)pageno {
+    [self dismissViewControllerAnimated:YES completion:^{
+        [m_view vGoto:pageno];
+    }];
+}
+
 -(void)composeFile:(id)sender
 {
-
-    
     int pageno = 0;
     struct PDFV_POS pos;
     [m_view vGetPos:&pos];
     pageno = pos.pageno;
-    float x = pos.x;
-    float y = pos.y;
-    NSString *tempFile; 
-    NSString *tempName;
-    tempName = [pdfName substringToIndex:pdfName.length-4];
-    tempFile = [tempName stringByAppendingFormat:@"%d%@",pageno,@".bookmark"];
-    NSString *tempPath;
-    tempPath = [pdfPath stringByAppendingFormat:@"%@",pdfName];
-    NSString *fileContent = [NSString stringWithFormat:@"%@,%@,%d,%f,%f",tempPath,tempName,pageno,x,y];
-    NSString *BookMarkDir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES)objectAtIndex:0];
     
-    NSString *bookMarkFile = [BookMarkDir stringByAppendingPathComponent:tempFile];
-    if(![[NSFileManager defaultManager]fileExistsAtPath:bookMarkFile])
-    {
-        [[NSFileManager defaultManager]createFileAtPath:bookMarkFile contents:nil attributes:nil];
-        NSFileHandle *fileHandle = [NSFileHandle fileHandleForUpdatingAtPath:bookMarkFile];
-        [fileHandle seekToEndOfFile];
-        [fileHandle writeData:[fileContent dataUsingEncoding:NSUTF8StringEncoding]];
-        [fileHandle closeFile];
-        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
-        NSString *str2=NSLocalizedString(@"Add BookMark Success!", @"Localizable");
-        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
-        UIAlertView *alter = [[UIAlertView alloc]initWithTitle:str1 message:str2  delegate:self cancelButtonTitle:str3 otherButtonTitles:nil, nil];
-        
-        [alter show];
-    }
-    else {
-        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
-        NSString *str2=NSLocalizedString(@"BookMark Already Exist", @"Localizable");
-        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
-        UIAlertView *alter = [[UIAlertView alloc]initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil, nil];
-        [alter show];
-    }
+    NSString *result = [RadaeePDFPlugin addToBookmarks:pdfPath page:pageno label:@""];
+    
+    NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+    NSString *str2=result;
+    NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+    
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:str1 message:str2 preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *action1 = [UIAlertAction actionWithTitle:str3 style:UIAlertActionStyleDefault handler:nil];
+    [alert addAction:action1];
+    [self presentViewController:alert animated:YES completion:nil];
 }
+
 - (IBAction)searchView:(id) sender
 {
-    searchToolBar = [UIToolbar new];
-    [searchToolBar sizeToFit];
+    _searchToolBar = [UIToolbar new];
+    [_searchToolBar sizeToFit];
     
-    //searchToolBar.barStyle = UIBarStyleBlackOpaque;
+    UIBarButtonItem *searchButton=[[UIBarButtonItem alloc]initWithImage:_searchImage style:UIBarButtonItemStylePlain target:self action:@selector(showSearchList)];
+    searchButton.width =30;
     UIBarButtonItem *nextbutton= [[UIBarButtonItem alloc] initWithImage:_nextImage style:UIBarButtonItemStylePlain target:self action:@selector(nextword:)];
     nextbutton.width =30;
     UIBarButtonItem *prevbutton=[[UIBarButtonItem alloc] initWithImage:_prevImage style:UIBarButtonItemStylePlain target:self action:@selector(prevword:)];
@@ -473,36 +510,177 @@ extern uint g_oval_color;
     UIBarButtonItem *cancelbtn=[[UIBarButtonItem alloc] initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(searchCancel:)];
     cancelbtn.width =30;
 
-    NSArray *toolbarItem = [[NSArray alloc]initWithObjects:prevbutton,nextbutton,cancelbtn,nil];
-    [self.searchToolBar setItems:toolbarItem animated:NO];
-    self.navigationItem.titleView =searchToolBar;
-
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:searchButton,prevbutton,nextbutton,cancelbtn,nil];
+    [_searchToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:_searchToolBar];
     
-    CGRect boundsc = [[UIScreen mainScreen]bounds];
+    
+    CGRect boundsc = [self getReaderBounds];
     int cwidth = boundsc.size.width;
+    CGRect statusbarRect = [[UIApplication sharedApplication] statusBarFrame];
+    
     if(SYS_VERSION>=7.0)
     {
         float hi = self.navigationController.navigationBar.bounds.size.height;
-        m_searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, hi+20, cwidth, 41)];
+        _m_searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, hi+statusbarRect.size.height, cwidth, 41)];
     }
     else
     {
-        m_searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, cwidth, 41)];
+        _m_searchBar = [[UISearchBar alloc] initWithFrame:CGRectMake(0, 0, cwidth, 41)];
     }
-    m_searchBar.delegate = self;
-    //m_searchBar.barStyle =UIBarStyleBlackTranslucent;
-    m_searchBar.autocorrectionType = UITextAutocorrectionTypeNo;
-    m_searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    m_searchBar.placeholder = @"Search";
-    m_searchBar.keyboardType = UIKeyboardTypeDefault;
-    [self.view addSubview:m_searchBar];
+    _m_searchBar.delegate = self;
+    //_m_searchBar.barStyle =UIBarStyleBlackTranslucent;
+    _m_searchBar.autocorrectionType = UITextAutocorrectionTypeNo;
+    _m_searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    _m_searchBar.placeholder = @"Search";
+    _m_searchBar.keyboardType = UIKeyboardTypeDefault;
+    [self.view addSubview:_m_searchBar];
     
-    [self toolbarStyle];
+    [self _toolBarStyle];
 
 }
+
+-(BOOL)prefersHomeIndicatorAutoHidden
+{
+    return YES;
+}
+
+- (BOOL)canBecomeFirstResponder
+{
+    return YES;
+}
+
+#pragma mark - Undo
+
+- (void)undoAnnot
+{
+    [m_view vUndo];
+}
+
+#pragma mark - Redo
+
+- (void)redoAnnot
+{
+    [m_view vRedo];
+}
+
+#pragma mark - Draw
+
+- (void)showDrawModeTableView
+{
+    if (m_bSel == true)
+    {
+        [m_view vSelEnd];
+        m_bSel = false;
+    }
+    
+    DrawModeTableViewController *vm = [[DrawModeTableViewController alloc] init];
+    vm.delegate = self;
+    
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        
+        vm.modalPresentationStyle = UIModalPresentationPopover;
+        vm.delegate = self;
+        vm.preferredContentSize = CGSizeMake(150, (44 * 6) + 10);
+        vm.tableView.scrollEnabled = NO;
+        
+        UIPopoverPresentationController *pop = vm.popoverPresentationController;
+        pop.permittedArrowDirections = UIPopoverArrowDirectionUp;
+        pop.barButtonItem = _drawButton;
+        
+        [self presentViewController:vm animated:YES completion:nil];
+    }
+    else
+    {
+        UIAlertController *action = [UIAlertController alertControllerWithTitle:@"Select Draw Mode" message:@"" preferredStyle:UIAlertControllerStyleActionSheet];
+        
+        UIAlertAction *ink = [UIAlertAction actionWithTitle:@"Ink" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self didSelectDrawMode:0];
+        }];
+        [ink setValue:[[UIImage imageNamed:@"btn_annot_ink.png"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *line = [UIAlertAction actionWithTitle:@"Arrow" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self didSelectDrawMode:1];
+        }];
+        [line setValue:[[UIImage imageNamed:@"btn_annot_line.png"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *rect = [UIAlertAction actionWithTitle:@"Rect" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self didSelectDrawMode:2];
+        }];
+        [rect setValue:[[UIImage imageNamed:@"btn_annot_rect.png"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *ellipse = [UIAlertAction actionWithTitle:@"Ellipse" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self didSelectDrawMode:3];
+        }];
+        [ellipse setValue:[[UIImage imageNamed:@"btn_annot_ellipse.png"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *stamp = [UIAlertAction actionWithTitle:@"Stamp" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self didSelectDrawMode:4];
+        }];
+        [stamp setValue:[[UIImage imageNamed:@"pdf_custom_stamp.png"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *note = [UIAlertAction actionWithTitle:@"Note" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self didSelectDrawMode:5];
+        }];
+        [note setValue:[[UIImage imageNamed:@"btn_annot_note.png"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull cancelAction) {
+            [action dismissViewControllerAnimated:YES completion:nil];
+        }];
+        
+        
+        [action addAction:ink];
+        [action addAction:line];
+        [action addAction:rect];
+        [action addAction:ellipse];
+        [action addAction:stamp];
+        [action addAction:note];
+        [action addAction:cancel];
+        
+        [self presentViewController:action animated:YES completion:nil];
+    }
+}
+
+- (void)didSelectDrawMode:(int)mode
+{
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        [self dismissViewControllerAnimated:YES completion:^{
+            [self switchDrawMode:mode];
+        }];
+    } else {
+        [self switchDrawMode:mode];
+    }
+}
+
+- (void)switchDrawMode:(int)mode
+{
+    switch (mode) {
+        case 0:
+            [self drawLine:nil];
+            break;
+        case 1:
+            [self drawRow];
+            break;
+        case 2:
+            [self drawRect:nil];
+            break;
+        case 3:
+            [self drawEllipse:nil];
+            break;
+        case 4:
+            [self drawImage];
+            break;
+        case 5:
+            b_noteAnnot = YES;
+            break;
+            
+        default:
+            break;
+    }
+}
+
 - (IBAction)drawLine:(id) sender
 {
-  
     if(![m_view vInkStart])
     {
         NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
@@ -513,9 +691,9 @@ extern uint g_oval_color;
         return;
     }
     
-    drawLineToolBar = [UIToolbar new];
-    [drawLineToolBar sizeToFit];
-    //drawLineToolBar.barStyle = UIBarStyleBlackOpaque;
+    _drawLineToolBar = [UIToolbar new];
+    [_drawLineToolBar sizeToFit];
+    //_drawLineToolBar.barStyle = UIBarStyleBlackOpaque;
     UIBarButtonItem *drawLineDoneBtn= [[UIBarButtonItem alloc] initWithImage:_doneImage style:UIBarButtonItemStylePlain target:self action:@selector(drawLineDone:)];
     drawLineDoneBtn.width =30;
     UIBarButtonItem *drawLineCancelBtn= [[UIBarButtonItem alloc] initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(drawLineCancel:)];
@@ -525,23 +703,63 @@ extern uint g_oval_color;
                                target:nil
                                action:nil];
     
-    NSArray *toolbarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
-    [self.drawLineToolBar setItems:toolbarItem animated:NO];
-    self.navigationItem.titleView =drawLineToolBar;
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
+    [_drawLineToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:_drawLineToolBar];
     
-    [self toolbarStyle];
+    [self _toolBarStyle];
 }
 -(IBAction)drawLineDone:(id)sender
 {
     [m_view vInkEnd];
-    [drawLineToolBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
+    [_drawLineToolBar removeFromSuperview];
 }
 -(IBAction)drawLineCancel:(id)sender
 {
-    [drawLineToolBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
+    [_drawLineToolBar removeFromSuperview];
     [m_view vInkCancel];
+}
+
+- (void)drawRow
+{
+    if(![m_view vLineStart])
+    {
+        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+        NSString *str2=NSLocalizedString(@"This Document is readonly", @"Localizable");
+        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+        UIAlertView *alter = [[UIAlertView alloc]initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil,nil];
+        [alter show];
+        return;
+    }
+    
+    _drawRectToolBar = [UIToolbar new];
+    [_drawRectToolBar sizeToFit];
+    UIBarButtonItem *drawLineDoneBtn=[[UIBarButtonItem alloc]initWithImage:_doneImage style:UIBarButtonItemStylePlain target:self action:@selector(drawRowDone)];
+    drawLineDoneBtn.width =30;
+    UIBarButtonItem *drawLineCancelBtn=[[UIBarButtonItem alloc]initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(drawRowCancel)];
+    drawLineCancelBtn.width =30;
+    UIBarButtonItem *spacer = [[UIBarButtonItem alloc]
+                               initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                               target:nil
+                               action:nil];
+    
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
+    [_drawRectToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:_drawRectToolBar];
+    
+    [self _toolBarStyle];
+}
+
+- (void)drawRowDone
+{
+    [m_view vLineEnd];
+    [_drawRectToolBar removeFromSuperview];
+}
+
+- (void)drawRowCancel
+{
+    [_drawRectToolBar removeFromSuperview];
+    [m_view vLineCancel];
 }
 
 - (IBAction)drawRect:(id) sender
@@ -557,9 +775,9 @@ extern uint g_oval_color;
         return;
     }
     
-    drawRectToolBar = [UIToolbar new];
-    [drawRectToolBar sizeToFit];
-    //drawRectToolBar.barStyle = UIBarStyleBlackOpaque;
+    _drawRectToolBar = [UIToolbar new];
+    [_drawRectToolBar sizeToFit];
+    //_drawRectToolBar.barStyle = UIBarStyleBlackOpaque;
     UIBarButtonItem *drawLineDoneBtn= [[UIBarButtonItem alloc] initWithImage:_doneImage style:UIBarButtonItemStylePlain target:self action:@selector(drawRectDone:)];
     drawLineDoneBtn.width =30;
     UIBarButtonItem *drawLineCancelBtn= [[UIBarButtonItem alloc] initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(drawRectCancel:)];
@@ -569,23 +787,21 @@ extern uint g_oval_color;
                                target:nil
                                action:nil];
     
-    NSArray *toolbarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
-    [self.drawRectToolBar setItems:toolbarItem animated:NO];
-    self.navigationItem.titleView =drawRectToolBar;
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
+    [_drawRectToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:_drawRectToolBar];
     
-    [self toolbarStyle];
+    [self _toolBarStyle];
 }
 -(IBAction)drawRectDone:(id)sender
 {
     
     [m_view vRectEnd];
-    [drawRectToolBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
+    [_drawRectToolBar removeFromSuperview];
 }
 -(IBAction)drawRectCancel:(id)sender
 {
-    [drawRectToolBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
+    [_drawRectToolBar removeFromSuperview];
     [m_view vRectCancel];
 }
 - (IBAction)drawEllipse:(id) sender
@@ -601,9 +817,9 @@ extern uint g_oval_color;
         return;
     }
     
-    drawRectToolBar = [UIToolbar new];
-    [drawRectToolBar sizeToFit];
-    //drawRectToolBar.barStyle = UIBarStyleBlackOpaque;
+    _drawRectToolBar = [UIToolbar new];
+    [_drawRectToolBar sizeToFit];
+    //_drawRectToolBar.barStyle = UIBarStyleBlackOpaque;
     UIBarButtonItem *drawLineDoneBtn= [[UIBarButtonItem alloc] initWithImage:_doneImage style:UIBarButtonItemStylePlain target:self action:@selector(drawEllipseDone:)];
     drawLineDoneBtn.width =30;
     UIBarButtonItem *drawLineCancelBtn= [[UIBarButtonItem alloc] initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(drawEllipseCancel:)];
@@ -613,25 +829,66 @@ extern uint g_oval_color;
                                target:nil
                                action:nil];
     
-    NSArray *toolbarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
-    [self.drawRectToolBar setItems:toolbarItem animated:NO];
-    self.navigationItem.titleView =drawRectToolBar;
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
+    [_drawRectToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:_drawRectToolBar];
     
-    [self toolbarStyle];
+    [self _toolBarStyle];
 }
 -(IBAction)drawEllipseDone:(id)sender
 {
     
     [m_view vEllipseEnd];
-    [drawRectToolBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
+    [_drawRectToolBar removeFromSuperview];
 }
 -(IBAction)drawEllipseCancel:(id)sender
 {
-    [drawRectToolBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
+    [_drawRectToolBar removeFromSuperview];
     [m_view vEllipseCancel];
 }
+
+- (void)drawImage
+{
+    if(![m_view vImageStart])
+    {
+        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+        NSString *str2=NSLocalizedString(@"This Document is readonly", @"Localizable");
+        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+        UIAlertView *alter = [[UIAlertView alloc]initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil,nil];
+        [alter show];
+        return;
+    }
+    
+    _drawRectToolBar = [UIToolbar new];
+    [_drawRectToolBar sizeToFit];
+    UIBarButtonItem *drawLineDoneBtn=[[UIBarButtonItem alloc]initWithImage:_doneImage style:UIBarButtonItemStylePlain target:self action:@selector(drawImageDone)];
+    drawLineDoneBtn.width =30;
+    UIBarButtonItem *drawLineCancelBtn=[[UIBarButtonItem alloc]initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(drawImageCancel)];
+    drawLineCancelBtn.width =30;
+    UIBarButtonItem *spacer = [[UIBarButtonItem alloc]
+                               initWithBarButtonSystemItem:UIBarButtonSystemItemFixedSpace
+                               target:nil
+                               action:nil];
+    
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:drawLineDoneBtn,spacer,drawLineCancelBtn,nil];
+    [_drawRectToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:_drawRectToolBar];
+    
+    [self _toolBarStyle];
+}
+
+- (void)drawImageDone
+{
+    [_drawRectToolBar removeFromSuperview];
+    [m_view vImageEnd];
+}
+
+- (void)drawImageCancel
+{
+    [_drawRectToolBar removeFromSuperview];
+    [m_view vImageCancel];
+}
+
 - (IBAction)viewMenu:(id) sender
 {
     
@@ -680,7 +937,7 @@ extern uint g_oval_color;
 }
 - (void)didRotateFromInterfaceOrientation:(UIInterfaceOrientation)fromInterfaceOrientation
 {
-    CGRect rect =[[UIScreen mainScreen]bounds];
+    CGRect rect = [self getReaderBounds];
     if ([self isPortrait])
     {
         if (rect.size.height < rect.size.width) {
@@ -702,9 +959,9 @@ extern uint g_oval_color;
     
     [m_view setFrame:rect];
     [m_view sizeThatFits:rect.size];
-    [self.toolBar sizeToFit];
+    [_toolBar sizeToFit];
     
-    CGRect boundsc = [[UIScreen mainScreen]bounds];
+    CGRect boundsc = [self getReaderBounds];
     int cwidth = boundsc.size.width;
     int cheight = boundsc.size.height;
     
@@ -732,7 +989,7 @@ extern uint g_oval_color;
         [m_slider setFrame:CGRectMake(0, cheight-50, cwidth, 50)];
         [m_slider sizeThatFits:CGRectMake(0, cheight-50, cwidth, 50).size];
         
-        [m_searchBar setFrame:CGRectMake(0,hi+20,cwidth,41)];
+        [_m_searchBar setFrame:CGRectMake(0,hi+20,cwidth,41)];
     }
     else
     {
@@ -742,9 +999,9 @@ extern uint g_oval_color;
         [m_Gridview sizeThatFits:CGRectMake(0, [[UIApplication sharedApplication] statusBarFrame].size.height + self.navigationController.navigationBar.frame.size.height, self.view.frame.size.width, self.view.frame.size.height - [[UIApplication sharedApplication] statusBarFrame].size.height + self.navigationController.navigationBar.frame.size.height).size];
         [m_slider setFrame:CGRectMake(0, cheight-hi-50-20, cwidth, 50)];
         [m_slider sizeThatFits:CGRectMake(0, cheight-hi-50-20, cwidth, 50).size];
-        [m_searchBar setFrame:CGRectMake(0, 0, cwidth, 41)];
+        [_m_searchBar setFrame:CGRectMake(0, 0, cwidth, 41)];
     }
-    [m_Thumbview refresh];
+    [m_Thumbview didRotate];
     [m_Gridview didRotate];
     
     [m_view resetZoomLevel];
@@ -761,6 +1018,64 @@ extern uint g_oval_color;
 - (int)getCurrentPage
 {
     return [m_view vGetCurrentPage];
+}
+
+- (CGImageRef)imageForPage:(int)pg
+{
+    CGRect bounds = [self getReaderBounds];
+    if (UIInterfaceOrientationIsLandscape([[UIApplication sharedApplication] statusBarOrientation])) {
+        if (bounds.size.height > bounds.size.width) {
+            bounds.size.width = bounds.size.height;
+            bounds.size.height = [[[[UIApplication sharedApplication] delegate] window] bounds].size.width;
+        }
+    }
+
+    PDFPage *page = [m_doc page:pg];;
+    float w = [m_doc pageWidth:pg];
+    float h = [m_doc pageHeight:pg];
+    int iw = w;
+    int ih = h;
+    PDF_DIB m_dib = NULL;
+    PDF_DIB bmp = Global_dibGet(m_dib, iw, ih);
+    float ratiox = 1;
+    float ratioy = 1;
+    
+    if (ratiox>ratioy) {
+        ratiox = ratioy;
+    }
+    
+    ratiox = ratiox * 1.0;
+    PDF_MATRIX mat = Matrix_createScale(ratiox, -ratiox, 0, h * ratioy);
+    Page_renderPrepare(page.handle, bmp);
+    Page_render(page.handle, bmp, mat, false, 1);
+    Matrix_destroy(mat);
+    page = nil;
+    
+    void *data = Global_dibGetData(bmp);
+    CGDataProviderRef provider = CGDataProviderCreateWithData(NULL, data, iw * ih * 4, NULL);
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGImageRef imgRef = CGImageCreate(iw, ih, 8, 32, iw<<2, cs, kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst, provider, NULL, FALSE, kCGRenderingIntentDefault);
+    
+    
+    CGContextRef context = CGBitmapContextCreate(NULL, (bounds.size.width - ((bounds.size.width - iw) / 2)) * 1, ih * 1, 8, 0, cs, kCGImageAlphaPremultipliedLast);
+    
+    
+    // Draw ...
+    //
+    CGContextSetAlpha(context, 1);
+    CGContextSetRGBFillColor(context, (CGFloat)0.0, (CGFloat)0.0, (CGFloat)0.0, (CGFloat)1.0 );
+    CGContextDrawImage(context, CGRectMake(((bounds.size.width- iw) / 2), 1, iw, ih), imgRef);
+    
+    
+    // Get your image
+    //
+    CGImageRef cgImage = CGBitmapContextCreateImage(context);
+    
+    
+    CGColorSpaceRelease(cs);
+    CGDataProviderRelease(provider);
+    
+    return cgImage;
 }
 
 - (void)setThumbnailBGColor:(int)color
@@ -819,8 +1134,10 @@ extern uint g_oval_color;
     }
 }
 
--(int)PDFOpen:(NSString *)path : (NSString *)pwd
+-(int)PDFOpen:(NSString *)path : (NSString *)pwd atPage:(int)page readOnly:(BOOL)readOnlyEnabled autoSave:(BOOL)autoSaveEnabled
 {
+    autoSave = autoSaveEnabled;
+    
     pdfPath = [path mutableCopy];
     pdfName = [[path lastPathComponent] mutableCopy];
     password = pwd;
@@ -842,9 +1159,11 @@ extern uint g_oval_color;
     case err_password:
         return 2;
         break;
+    case err_bad_file:
+        return 4;
     default: return 0;
     }
-    CGRect rect = [[UIScreen mainScreen]bounds];
+    CGRect rect = [self getReaderBounds];
     
     //GEAR
     if (![self isPortrait] && rect.size.width < rect.size.height) {
@@ -853,19 +1172,27 @@ extern uint g_oval_color;
         rect.size.width = height;
     }
     //END
+    CGRect statusbarRect = [[UIApplication sharedApplication] statusBarFrame];
+    
     if(SYS_VERSION>=7.0)
     {
         m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height)];
     }
     else
     {
-        m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-20-44)];
+        m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-statusbarRect.size.height-44)];
     }
     
     [m_view setFirstPageCover:firstPageCover];
     [m_view setDoubleTapZoomMode:doubleTapZoomMode];
+    [m_view setReadOnly:readOnlyEnabled];
     [m_view vOpen :m_doc :(id<PDFViewDelegate>)self];
-    pagecount =[m_doc pageCount];
+    
+    if (page > 0) {
+        [m_view vGoto:page];
+    }
+    
+    _pagecount =[m_doc pageCount];
     [self.view addSubview:m_view];
     m_bSel = false;
     
@@ -886,9 +1213,12 @@ extern uint g_oval_color;
         case err_password:
             return 2;
             break;
+        case err_bad_file:
+            return 4;
+            break;
         default: return 0;
     }
-    CGRect rect = [[UIScreen mainScreen]bounds];
+    CGRect rect = [self getReaderBounds];
     
     //GEAR
     if (![self isPortrait] && rect.size.width < rect.size.height) {
@@ -897,18 +1227,20 @@ extern uint g_oval_color;
         rect.size.width = height;
     }
     //END
+    CGRect statusbarRect = [[UIApplication sharedApplication] statusBarFrame];
+    
     if(SYS_VERSION>=7.0)
     {
         m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height)];
     }
     else
     {
-        m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-20-44)];
+        m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-statusbarRect.size.height-44)];
     }
     [m_view setFirstPageCover:firstPageCover];
     [m_view setDoubleTapZoomMode:doubleTapZoomMode];
     [m_view vOpen:m_doc:(id<PDFViewDelegate>)self];
-    pagecount =[m_doc pageCount];
+    _pagecount =[m_doc pageCount];
     [self.view addSubview:m_view];
     m_bSel = false;
     return 1;
@@ -923,14 +1255,14 @@ extern uint g_oval_color;
     switch( err )
     {
         case err_ok:
-        break;
+            break;
         case err_password:
-        return 2;
-        break;
+            return 2;
+            break;
         default: return 0;
     }
     
-    CGRect rect = [[UIScreen mainScreen]bounds];
+    CGRect rect = [self getReaderBounds];
     
     //GEAR
     if (![self isPortrait] && rect.size.width < rect.size.height) {
@@ -939,18 +1271,20 @@ extern uint g_oval_color;
         rect.size.width = height;
     }
     //END
+    CGRect statusbarRect = [[UIApplication sharedApplication] statusBarFrame];
+    
     if(SYS_VERSION>=7.0)
     {
         m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height)];
     }
     else
     {
-        m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-20-44)];
+        m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-statusbarRect.size.height-44)];
     }
     [m_view setFirstPageCover:firstPageCover];
     [m_view setDoubleTapZoomMode:doubleTapZoomMode];
     [m_view vOpen :m_doc :(id<PDFViewDelegate>)self];
-    pagecount =[m_doc pageCount];
+    _pagecount =[m_doc pageCount];
     [self.view addSubview:m_view];
     m_bSel = false;
     return 1;
@@ -958,7 +1292,7 @@ extern uint g_oval_color;
 
 - (void)PDFSeekBarInit:(int)pageno
 {
-    CGRect boundsc = [[UIScreen mainScreen]bounds];
+    CGRect boundsc = [self getReaderBounds];
     if (![self isPortrait] && boundsc.size.width < boundsc.size.height) {
         float height = boundsc.size.height;
         boundsc.size.height = boundsc.size.width;
@@ -976,15 +1310,15 @@ extern uint g_oval_color;
     if(SYS_VERSION>=7.0)
     {
         m_slider = [[UISlider alloc] initWithFrame:CGRectMake(0, cheight-50, cwidth, 50)];
-        pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 20+hi+1, 65, 30)];
+        _pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 20+hi+1, 65, 30)];
     }
     else{
         m_slider = [[UISlider alloc] initWithFrame:CGRectMake(0, cheight-hi-50-20, cwidth, 50)];
-        pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 0, 65, 30)];
+        _pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 0, 65, 30)];
     }
     
     m_slider.minimumValue = 1;
-    m_slider.maximumValue = pagecount;
+    m_slider.maximumValue = _pagecount;
     m_slider.continuous = NO;
     m_slider.value = pageno;
     
@@ -992,32 +1326,32 @@ extern uint g_oval_color;
     
     [m_slider setBackgroundColor:[UIColor blackColor]];
     
-    [self toolbarStyle];
+    [self _toolBarStyle];
     
     [self.view addSubview:m_slider];
     
-    pagenow = pageno;
-    pageNumLabel.backgroundColor = [UIColor colorWithRed:1.5 green:1.5 blue:1.5 alpha:0.2];
-    pageNumLabel.textColor = [UIColor whiteColor];
-    pageNumLabel.adjustsFontSizeToFitWidth = YES;
-    pageNumLabel.textAlignment= NSTextAlignmentCenter;
-    pageNumLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
-    pageNumLabel.layer.cornerRadius = 10;
-    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",pagecount];
-    pagestr = [pagestr stringByAppendingFormat:@"%d",pagecount];
-    pageNumLabel.text = pagestr;
-    pageNumLabel.font = [UIFont boldSystemFontOfSize:16];
-    pageNumLabel.shadowColor = [UIColor grayColor];
-    pageNumLabel.shadowOffset = CGSizeMake(1.0,1.0);
-    [self.view addSubview:pageNumLabel];
+    _pagenow = pageno;
+    _pageNumLabel.backgroundColor = [UIColor colorWithRed:1.5 green:1.5 blue:1.5 alpha:0.2];
+    _pageNumLabel.textColor = [UIColor whiteColor];
+    _pageNumLabel.adjustsFontSizeToFitWidth = YES;
+    _pageNumLabel.textAlignment= NSTextAlignmentCenter;
+    _pageNumLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
+    _pageNumLabel.layer.cornerRadius = 10;
+    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",_pagecount];
+    pagestr = [pagestr stringByAppendingFormat:@"%d",_pagecount];
+    _pageNumLabel.text = pagestr;
+    _pageNumLabel.font = [UIFont boldSystemFontOfSize:16];
+    _pageNumLabel.shadowColor = [UIColor grayColor];
+    _pageNumLabel.shadowOffset = CGSizeMake(1.0,1.0);
+    [self.view addSubview:_pageNumLabel];
     
-    [pageNumLabel setHidden:NO];
+    [_pageNumLabel setHidden:NO];
 }
 
 
 -(void)PDFThumbNailinit:(int)pageno
 {
-    CGRect boundsc = [[UIScreen mainScreen]bounds];
+    CGRect boundsc = [self getReaderBounds];
     if (![self isPortrait] && boundsc.size.width < boundsc.size.height) {
         float height = boundsc.size.height;
         boundsc.size.height = boundsc.size.width;
@@ -1028,44 +1362,42 @@ extern uint g_oval_color;
     int cheight = boundsc.size.height;
     
     
-    float hi = self.navigationController.navigationBar.bounds.size.height;
-    CGRect rect;
-    rect = [[UIApplication sharedApplication] statusBarFrame];
-
+    float hi = 44;
+    CGRect statusbarRect = [[UIApplication sharedApplication] statusBarFrame];
+    
     if(SYS_VERSION>=7.0)
     {
         m_Thumbview = [[PDFThumbView alloc] initWithFrame:CGRectMake(0, cheight-thumbHeight, cwidth, thumbHeight)];
-        pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 20+hi+1, 65, 30)];
+        _pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, statusbarRect.size.height+hi+1, 65, 30)];
     }
     else{
-        m_Thumbview = [[PDFThumbView alloc] initWithFrame:CGRectMake(0, cheight-hi-thumbHeight-20, cwidth, thumbHeight)];
-        pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 0, 65, 30)];
+        m_Thumbview = [[PDFThumbView alloc] initWithFrame:CGRectMake(0, cheight-hi-thumbHeight-statusbarRect.size.height, cwidth, thumbHeight)];
+        _pageNumLabel = [[UILabel alloc]initWithFrame:CGRectMake(0, 0, 65, 30)];
     }
     [m_Thumbview vOpen :m_doc :(id<PDFThumbViewDelegate>)self];
     [self.view addSubview:m_Thumbview];
-    pagenow = pageno;
-    pageNumLabel.backgroundColor = [UIColor colorWithRed:1.5 green:1.5 blue:1.5 alpha:0.2];
-    pageNumLabel.textColor = [UIColor whiteColor];
-    pageNumLabel.adjustsFontSizeToFitWidth = YES;
-    pageNumLabel.textAlignment = NSTextAlignmentCenter;
-    pageNumLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
-    pageNumLabel.layer.cornerRadius = 10;
-    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",pagecount];
-    pagestr = [pagestr stringByAppendingFormat:@"%d",pagecount];    
-    pageNumLabel.text = pagestr;
-    pageNumLabel.font = [UIFont boldSystemFontOfSize:16];
-    pageNumLabel.shadowColor = [UIColor grayColor];
-    pageNumLabel.shadowOffset = CGSizeMake(1.0,1.0);
-    [self.view addSubview:pageNumLabel];
+    _pagenow = pageno;
+    _pageNumLabel.backgroundColor = [UIColor colorWithRed:1.5 green:1.5 blue:1.5 alpha:0.2];
+    _pageNumLabel.textColor = [UIColor whiteColor];
+    _pageNumLabel.adjustsFontSizeToFitWidth = YES;
+    _pageNumLabel.textAlignment = NSTextAlignmentCenter;
+    _pageNumLabel.baselineAdjustment = UIBaselineAdjustmentAlignCenters;
+    _pageNumLabel.layer.cornerRadius = 10;
+    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",_pagecount];
+    pagestr = [pagestr stringByAppendingFormat:@"%d",_pagecount];
+    _pageNumLabel.text = pagestr;
+    _pageNumLabel.font = [UIFont boldSystemFontOfSize:16];
+    _pageNumLabel.shadowColor = [UIColor grayColor];
+    _pageNumLabel.shadowOffset = CGSizeMake(1.0,1.0);
+    [self.view addSubview:_pageNumLabel];
  
-    [pageNumLabel setHidden:NO];
+    [_pageNumLabel setHidden:NO];
     
 }
 
-
 -(void)initbar :(int) pageno
 {
-    CGRect boundsc = [[UIScreen mainScreen]bounds];
+    CGRect boundsc = [self getReaderBounds];
     if (![self isPortrait] && boundsc.size.width < boundsc.size.height) {
         float height = boundsc.size.height;
         boundsc.size.height = boundsc.size.width;
@@ -1075,14 +1407,14 @@ extern uint g_oval_color;
     int cwidth = boundsc.size.width;
     int cheight = boundsc.size.height;
     
-    sliderBar = [[UISlider alloc]initWithFrame:CGRectMake(20, cheight-100, cwidth-30, 10)];
-    pagecount = [m_doc pageCount];
-    sliderBar.maximumValue = pagecount; //The Biggest Page Number
-    sliderBar.minimumValue = 1;//The Littlest Page Number
-    [self.view addSubview:sliderBar];
-    [sliderBar setHidden:NO];
-    [sliderBar addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
-    [sliderBar addTarget:self action:@selector(sliderDragUp:) forControlEvents:UIControlEventTouchUpInside];
+    _sliderBar = [[UISlider alloc]initWithFrame:CGRectMake(20, cheight-100, cwidth-30, 10)];
+    _pagecount = [m_doc pageCount];
+    _sliderBar.maximumValue = _pagecount; //The Biggest Page Number
+    _sliderBar.minimumValue = 1;//The Littlest Page Number
+    [self.view addSubview:_sliderBar];
+    [_sliderBar setHidden:NO];
+    [_sliderBar addTarget:self action:@selector(sliderValueChanged:) forControlEvents:UIControlEventValueChanged];
+    [_sliderBar addTarget:self action:@selector(sliderDragUp:) forControlEvents:UIControlEventTouchUpInside];
 }
 -(void)PDFGoto :(int)pageno
 {
@@ -1097,10 +1429,10 @@ extern uint g_oval_color;
 {
     [m_view resetZoomLevel];
     [m_view vGoto:pageno];
-    pagenow = pageno + 1;
-    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",pagenow];
-    pagestr = [pagestr stringByAppendingFormat:@"%d",pagecount];
-    pageNumLabel.text = pagestr;
+    _pagenow = pageno + 1;
+    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",_pagenow];
+    pagestr = [pagestr stringByAppendingFormat:@"%d",_pagecount];
+    _pageNumLabel.text = pagestr;
     [self hideGridView];
 }
 
@@ -1111,15 +1443,15 @@ extern uint g_oval_color;
     err = [m_doc open:path :pwd];
     switch( err )
     {
-    case err_ok:
-        break;
-    case err_password:
-        return 2;
-        break;
-    default: return 0;
+        case err_ok:
+            break;
+        case err_password:
+            return 2;
+            break;
+        default: return 0;
     }
-
-    CGRect rect = [[UIScreen mainScreen]bounds];
+    
+    CGRect rect = [self getReaderBounds];
     //GEAR
     if (![self isPortrait] && rect.size.width < rect.size.height) {
         float height = rect.size.height;
@@ -1130,28 +1462,34 @@ extern uint g_oval_color;
     m_view = [[PDFView alloc] initWithFrame:CGRectMake(0, 0, rect.size.width, rect.size.height-20-self.navigationController.navigationBar.bounds.size.height)];
    // [m_view vOpenPage:m_doc :pageno :x :y :self];
     [m_view vGoto:pageno];
-    pagecount = [m_doc pageCount];
+    _pagecount = [m_doc pageCount];
     [self.view addSubview:m_view];
     return 1;
 }
 -(IBAction)sliderValueChanged:(id)sender
 {
-    pagenow = (int)round(sliderBar.value);
-    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",pagenow];
-    pagestr = [pagestr stringByAppendingFormat:@"%d",pagecount];
-    pageNumLabel.text = pagestr;
+    _pagenow = (int)round(_sliderBar.value);
+    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",_pagenow];
+    pagestr = [pagestr stringByAppendingFormat:@"%d",_pagecount];
+    _pageNumLabel.text = pagestr;
     
 }
 -(IBAction)sliderDragUp:(id)sender
 {
-    pagenow = (int)round(sliderBar.value);
-    [m_view vGoto:pagenow - 1];
-    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",pagenow];
-    pagestr = [pagestr stringByAppendingFormat:@"%d",pagecount];
+    _pagenow = (int)round(_sliderBar.value);
+    [m_view vGoto:_pagenow - 1];
+    NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",_pagenow];
+    pagestr = [pagestr stringByAppendingFormat:@"%d",_pagecount];
 }
 
 -(void)PDFClose
 {
+    [_toolBar removeFromSuperview];
+    
+    if (SEARCH_LIST == 1) {
+        [[RDExtendedSearch sharedInstance] clearSearch];
+    }
+    
     if( m_view != nil )
     {
         b_outline = false;
@@ -1162,98 +1500,111 @@ extern uint g_oval_color;
     m_doc = NULL;
 }
 //Add Call Search API
-- (void)searchBarSearchButtonClicked:(UISearchBar *)m_SearchBar
+- (void)searchBarSearchButtonClicked:(UISearchBar *)_m_searchBar
 {
     float hi = self.navigationController.navigationBar.bounds.size.height;
-    CGRect boundsc = [[UIScreen mainScreen]bounds];
+    CGRect boundsc = [self getReaderBounds];
     int cwidth = boundsc.size.width;
     if(SYS_VERSION>=7.0)
     {
-        [m_searchBar setFrame:CGRectMake(0,hi+20,cwidth,41)];
+        [_m_searchBar setFrame:CGRectMake(0,hi+20,cwidth,41)];
     }
     else
     {
-        [m_searchBar setFrame:CGRectMake(0,0,cwidth,41)];
+        [_m_searchBar setFrame:CGRectMake(0,0,cwidth,41)];
     }
-    NSString *text = m_SearchBar.text;
-    [m_SearchBar resignFirstResponder];
-    if (m_SearchBar.text.length >40)
+    NSString *text = _m_searchBar.text;
+    [_m_searchBar resignFirstResponder];
+    if (_m_searchBar.text.length >40)
     {
         return ;
     }
-    if(!b_findStart)
-    {
-        findString =text;
-        [m_view vFindStart:text :g_CaseSensitive :g_MatchWholeWord];
-        b_findStart = YES;
-        [m_view vFind:1];
-    }
-    else if(text != nil && text.length > 0)
-    {
-        bool stringCmp =false;
-        if( findString != NULL )
-        {
-            if(g_CaseSensitive == true)
-                stringCmp=[text compare:findString] == NSOrderedSame;
-            else
-                stringCmp=[text caseInsensitiveCompare:findString] == NSOrderedSame;
-        }
-        if( !stringCmp )
-        {
-            [m_view vFindStart:text :g_CaseSensitive :g_MatchWholeWord];
-            findString =text;
-        }
-        [m_view vFind:1];
+    
+    if (SEARCH_LIST == 1) {
+        [self showSearchList];
+    } else {
+        [self startSearch:text dir:1 reset:NO];
     }
 }
+
 -(IBAction)prevword:(id)sender
 {
-    NSString *text = m_searchBar.text;
-    [m_searchBar resignFirstResponder];
-    if (m_searchBar.text.length >40)
+    NSString *text = _m_searchBar.text;
+    [_m_searchBar resignFirstResponder];
+    if (_m_searchBar.text.length >40)
     {
         return ;
     }
-    if(!b_findStart)
-    {
-        findString =text;
-        [m_view vFindStart:text :g_CaseSensitive :g_MatchWholeWord];
-        b_findStart = YES;
-        [m_view vFind:-1];
-    }
-    else if(text != nil && text.length > 0)
-    {
-        bool stringCmp =false;
-        if( findString != NULL )
-        {
-            if(g_CaseSensitive == true)
-                stringCmp=[text compare:findString] == NSOrderedSame;
-            else
-                stringCmp=[text caseInsensitiveCompare:findString] == NSOrderedSame;
+    
+    if (SEARCH_LIST == 1) {
+        int i = [[RDExtendedSearch sharedInstance] getPrevPageFromCurrentPage:_pagenow];
+        
+        if (i >= 0) {
+            [self PDFGoto:i];
+            [self startSearch:text dir:-1 reset:YES];
         }
-        if( !stringCmp )
-        {
-            [m_view vFindStart:text :g_CaseSensitive :g_MatchWholeWord];
-            findString =text;
-        }
-        [m_view vFind:-1];
+    } else {
+        [self startSearch:text dir:-1 reset:NO];
     }
 }
 
 -(IBAction)nextword:(id)sender
 {
-    NSString *text = m_searchBar.text;
-    [m_searchBar resignFirstResponder];
-    if (m_searchBar.text.length >40)
+    NSString *text = _m_searchBar.text;
+    [_m_searchBar resignFirstResponder];
+    if (_m_searchBar.text.length >40)
     {
         return ;
     }
+    
+    if (SEARCH_LIST == 1) {
+        int i = [[RDExtendedSearch sharedInstance] getNextPageFromCurrentPage:_pagenow];
+        
+        if (i >= 0) {
+            [self PDFGoto:i];
+            [self startSearch:text dir:1 reset:YES];
+        }
+    } else {
+        NSString *text = _m_searchBar.text;
+        [_m_searchBar resignFirstResponder];
+        if (_m_searchBar.text.length >40)
+        {
+            return;
+        }
+        
+        [self startSearch:text dir:1 reset:NO];
+    }
+}
+
+-(IBAction)searchCancel:(id)sender
+{
+    if (SEARCH_LIST == 1) {
+        [[RDExtendedSearch sharedInstance] clearSearch];
+    }
+    
+    [_m_searchBar resignFirstResponder];
+    [_m_searchBar removeFromSuperview];
+    [_searchToolBar removeFromSuperview];
+    findString = nil;
+    [m_view vFindEnd];
+    b_findStart = NO;
+    _m_searchBar = NULL;
+}
+
+- (void)startSearch:(NSString *)text dir:(int)dir reset:(BOOL)reset
+{
+    if (reset) {
+        findString = nil;
+        [m_view vFindEnd];
+        b_findStart = NO;
+    }
+    
     if(!b_findStart)
     {
         findString =text;
         [m_view vFindStart:text :g_CaseSensitive :g_MatchWholeWord];
         b_findStart = YES;
-        [m_view vFind:1];
+        [m_view vFind:dir];
     }
     else if(text != nil && text.length > 0)
     {
@@ -1270,24 +1621,58 @@ extern uint g_oval_color;
             [m_view vFindStart:text :g_CaseSensitive :g_MatchWholeWord];
             findString =text;
         }
-        [m_view vFind:1];
+        [m_view vFind:dir];
     }
 }
 
--(IBAction)searchCancel:(id)sender
+#pragma mark - Search List
+- (void)showSearchList
 {
-    [m_searchBar resignFirstResponder];
-    [m_searchBar removeFromSuperview];
-    self.navigationItem.titleView =toolBar;
-    findString = nil;
-    [m_view vFindEnd];
-    b_findStart = NO;
-    m_searchBar = NULL;
+    if (SEARCH_LIST == 1) {
+        [[RDExtendedSearch sharedInstance] searchText:_m_searchBar.text inDoc:m_doc success:^(NSMutableArray *occurrences) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if ([[[RDExtendedSearch sharedInstance] searchResults] count] > 0) {
+                    SearchResultTableViewController *viewController = [[SearchResultTableViewController alloc] initWithNibName:@"SearchResultTableViewController" bundle:nil];
+                    viewController.delegate = self;
+                    
+                    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+                        
+                        viewController.modalPresentationStyle = UIModalPresentationPopover;
+                        UIPopoverPresentationController *popover = viewController.popoverPresentationController;
+                        popover.barButtonItem = (UIBarButtonItem *)[_searchToolBar.items objectAtIndex:0]; // search bar button item
+                        
+                        [self presentViewController:viewController animated:YES completion:nil];
+                    }
+                    else
+                    {
+                        b_outline = YES;
+                        [self.navigationController pushViewController:viewController animated:YES];
+                    }
+                }
+            });
+        }];
+    }
 }
 
-- (void)didSelectItem:(int)page
+- (void)didSelectSelectSearchResult:(int)index
 {
-    [m_view vGoto:page];
+    if (b_outline) {
+        b_outline = NO;
+        b_search_outline = YES;
+        [self.navigationController popViewControllerAnimated:YES];
+        [self goToSearchResult:index];
+    } else {
+        [self dismissViewControllerAnimated:YES completion:^{
+            [self goToSearchResult:index];
+        }];
+    }
+}
+
+- (void)goToSearchResult:(int)index
+{
+    [m_view resetZoomLevel];
+    [self PDFGoto:index];
+    [self startSearch:[[RDExtendedSearch sharedInstance] searchTxt] dir:1 reset:YES];
 }
 
 - (void)OnPageChanged :(int)pageno
@@ -1302,8 +1687,8 @@ extern uint g_oval_color;
     
     pageno++;
     NSString *pagestr = [[NSString alloc]initWithFormat:@"%d/",pageno];
-    pagestr = [pagestr stringByAppendingFormat:@"%d",pagecount];
-    pageNumLabel.text = pagestr;
+    pagestr = [pagestr stringByAppendingFormat:@"%d",_pagecount];
+    _pageNumLabel.text = pagestr;
     
     [m_Thumbview vGoto:pageno-1];
     m_slider.value = pageno;
@@ -1311,11 +1696,24 @@ extern uint g_oval_color;
 
 - (void)OnSingleTapped:(float)x :(float)y
 {
+    if (_delegate) {
+        struct PDFV_POS pos;
+        [m_view vGetPos:&pos x:x y:y];
+        [_delegate didTapOnPage:pos.pageno atPoint:CGPointMake(x, y)];
+    }
+    
+    if (b_noteAnnot) {
+        posx = x;
+        posy = y;
+        [self TextAnnot:nil];
+        return;
+    }
+    
     if (!pickerView.hidden) {
         pickerView.hidden = YES;
         confirmPickerBtn.hidden = YES;
     }
-    [m_searchBar resignFirstResponder];
+    [_m_searchBar resignFirstResponder];
     if(SYS_VERSION>=7.0)
     {
         //ios7
@@ -1336,18 +1734,18 @@ extern uint g_oval_color;
     else
     {
         
-         if(m_Thumbview.hidden)
-         {
-             m_Thumbview.hidden = NO;
-             m_slider.hidden = NO;
-             [self.pageNumLabel setHidden:false];
-         }
-         else
-         {
-             m_Thumbview.hidden =YES;
-             m_slider.hidden = YES;
-             [self.pageNumLabel setHidden:true];
-         }
+        if(m_Thumbview.hidden)
+        {
+            m_Thumbview.hidden = NO;
+            m_slider.hidden = NO;
+            [_pageNumLabel setHidden:false];
+        }
+        else
+        {
+            m_Thumbview.hidden =YES;
+            m_slider.hidden = YES;
+            [_pageNumLabel setHidden:true];
+        }
         
         b_outline = true;
         m_bSel = false;
@@ -1358,7 +1756,11 @@ extern uint g_oval_color;
 
 - (void)OnDoubleTapped:(float)x :(float)y
 {
-    
+    if (_delegate) {
+        struct PDFV_POS pos;
+        [m_view vGetPos:&pos x:x y:y];
+        [_delegate didDoubleTapOnPage:pos.pageno atPoint:CGPointMake(x, y)];
+    }
 }
 
 - (void)OnFound:(bool)found
@@ -1388,21 +1790,8 @@ extern uint g_oval_color;
     return statusBarHidden;
 }
 
-- (void)OnSelEnd:(float)x1 :(float)y1 :(float)x2 :(float)y2
-{
-    if (m_bSel) {
-        NSString *s = [m_view vSelGetText];
-        if(s)
-        {
-            [popupMenu1 showInView:m_view atPoint:CGPointMake(x1, y1)];//popup a menu.
-            posx = (int)x2;
-            posy = (int)y2;
-        }
-        
-    }
-}
-#pragma mark AnnotToolBar
--(void)addAnnotToolBar
+#pragma mark annotToolBar
+-(void)addannotToolBar
 {
     annotToolBar = [UIToolbar new];
     [annotToolBar sizeToFit];
@@ -1415,11 +1804,11 @@ extern uint g_oval_color;
     UIBarButtonItem *cancelbtn= [[UIBarButtonItem alloc] initWithImage:_removeImage style:UIBarButtonItemStylePlain target:self action:@selector(annotCancel)];
     cancelbtn.width =30;
     
-    NSArray *toolbarItem = [[NSArray alloc]initWithObjects:playbutton,deletebutton,cancelbtn,nil];
-    [annotToolBar setItems:toolbarItem animated:NO];
-    self.navigationItem.titleView =annotToolBar;
+    NSArray *_toolBarItem = [[NSArray alloc]initWithObjects:playbutton,deletebutton,cancelbtn,nil];
+    [annotToolBar setItems:_toolBarItem animated:NO];
+    [_toolBar addSubview:annotToolBar];
     
-    [self toolbarStyle];
+    [self _toolBarStyle];
 }
 -(void)performAnnot
 {
@@ -1431,30 +1820,68 @@ extern uint g_oval_color;
 }
 -(void)annotCancel
 {
-    [self removeAnnotToolBar];
+    [m_view vAnnotEnd];
+    [self removeannotToolBar];
 }
--(void)removeAnnotToolBar
+-(void)removeannotToolBar
 {
     [annotToolBar removeFromSuperview];
-     self.navigationItem.titleView =toolBar;
 }
+
+- (void)didTapAnnot:(PDFAnnot *)annot atPage:(int)page atPoint:(CGPoint)point
+{
+    if (_delegate) {
+        [_delegate didTapOnAnnotationOfType:annot.type atPage:page atPoint:point];
+    }
+}
+
 //enter annotation status.
 -(void)OnAnnotClicked:(PDFPage *)page :(PDFAnnot *)annot :(float)x :(float)y
 {
+    annotTapped = CGPointMake(x, y);
+    
+    // Check if an empty signature field
+    if (annot.fieldType == 4 && annot.getSignStatus == 0) {
+        
+        NSString *sigPath = [m_view getImageFromAnnot:annot];
+        UIImage *sigImage = [UIImage imageWithContentsOfFile:sigPath];
+        NSData *sigData = [NSData dataWithContentsOfFile:sigPath];
+        
+        NSString *emptyPath = [m_view emptyAnnotWithSize:sigImage.size];
+        NSData *emptyData = [NSData dataWithContentsOfFile:emptyPath];
+        
+        // Check if signature is empty
+        if ([sigData isEqualToData:emptyData]){
+            
+            [self presentSignatureViewController];
+        }
+        else
+        {
+            // Overwrite signature
+            UIAlertController *signAlert = [UIAlertController alertControllerWithTitle:@"Warning" message:@"Signature already exist. Do you want delete it?" preferredStyle:UIAlertControllerStyleAlert];
+            UIAlertAction *delete = [UIAlertAction actionWithTitle:@"Delete" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+                [self presentSignatureViewController];
+            }];
+            UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+                [m_view vAnnotEnd];
+            }];
+            [signAlert addAction:delete];
+            [signAlert addAction:cancel];
+            [self presentViewController:signAlert animated:YES completion:nil];
+        }
+        
+        [[NSFileManager defaultManager] removeItemAtPath:sigPath error:nil];
+        [[NSFileManager defaultManager] removeItemAtPath:emptyPath error:nil];
+    }
+    
     if(SYS_VERSION>=7.0)
     {
-        //TEST EditText method
-        //if([annot fieldType]==2){
-        //    [annot setEditText:@"123"];
-        //}
-        
         //ios7
         m_Thumbview.hidden = NO;
-        m_slider.hidden = NO;
-        [self.pageNumLabel setHidden:false];
+        [_pageNumLabel setHidden:false];
         [self.navigationController setNavigationBarHidden:NO animated:YES];
         [[UIApplication sharedApplication] setStatusBarHidden:NO];
-        [m_searchBar setHidden:NO];
+        [_m_searchBar setHidden:NO];
         statusBarHidden = NO;
         
         b_outline = true;
@@ -1465,17 +1892,16 @@ extern uint g_oval_color;
     {
         
         m_Thumbview.hidden = NO;
-        m_slider.hidden = YES;
-        [self.pageNumLabel setHidden:false];
-       
+        [_pageNumLabel setHidden:false];
+        
         b_outline = true;
         m_bSel = false;
     }
-
+    
     PDFannot = annot;
     annot_x  = x;
     annot_y  = y;
-    [self addAnnotToolBar];
+    [self addannotToolBar];
 }
 //notified when annotation status end.
 - (void)OnAnnotEnd
@@ -1488,12 +1914,12 @@ extern uint g_oval_color;
         [textFd resignFirstResponder];
         textFd.hidden = YES;
     }
-    [self removeAnnotToolBar];
+    [self removeannotToolBar];
 }
 //this mehod fired only when vAnnotPerform method invoked.
 - (void)OnAnnotGoto:(int)pageno
 {
-     [m_view vGoto:pageno];
+    [m_view vGoto:pageno];
 }
 //this mehod fired only when vAnnotPerform method invoked.
 - (void)OnAnnotPopup:(PDFAnnot *)annot :(NSString *)subj :(NSString *)text
@@ -1506,8 +1932,8 @@ extern uint g_oval_color;
         [textAnnotVC setDelegate:self];
         [textAnnotVC setPos_y:posy];
         [textAnnotVC setText:text];
-        textAnnotVC.modalTransitionStyle = UIModalTransitionStyleCoverVertical;
-        textAnnotVC.modalPresentationStyle = UIModalPresentationFormSheet;
+        [textAnnotVC setSubject:subj];
+        
         UINavigationController *navController = [[UINavigationController alloc]
                                                  initWithRootViewController:textAnnotVC];
         [navController setModalPresentationStyle:UIModalPresentationFormSheet];
@@ -1515,6 +1941,24 @@ extern uint g_oval_color;
     }
 
 }
+
+- (void)OnAnnotList:(PDFAnnot *)annot items:(NSArray *)dataArray selectedIndexes:(NSArray *)indexes
+{
+    NSLog(@"list sels");
+    
+    annotListTV = [[RDAnnotListViewController alloc] init];
+    BOOL isMultiSel;
+    isMultiSel = [annot isMultiSel];
+    annotListTV.delegate = self;
+    annotListTV.annotList = dataArray;
+    annotListTV.multiSel = isMultiSel;
+    annotListTV.annotSelected = [NSMutableArray arrayWithArray:indexes];
+    annotListTV.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    annotListTV.modalPresentationStyle = UIModalPresentationOverCurrentContext;
+    b_outline = TRUE;
+    [self presentViewController:annotListTV animated:YES completion:nil];
+}
+
 //this mehod fired only when vAnnotPerform method invoked.
 - (void)OnAnnotOpenURL:(NSString *)url
 {
@@ -1558,22 +2002,17 @@ extern uint g_oval_color;
 
 -(void)OnLongPressed:(float)x :(float)y
 {
+    if (_delegate) {
+        [_delegate didLongPressOnPage:(_pagenow - 1) atPoint:CGPointMake(x, y)];
+    }
+    
     [m_view vSelStart];//start to select
     m_bSel = true;
 }
-/*
--(void)OnFound:(bool)found
-{
-    if( !found )//todo: show alert dialog
-    {
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Waring" message:@"Find Over" delegate:self cancelButtonTitle:@"OK" otherButtonTitles:nil, nil];
-        [alert show];
-    }
-}
-*/
+
 -(void)OnSingleTapped:(float)x :(float)y :(NSString *)text
 {
-    [m_searchBar resignFirstResponder];
+    [_m_searchBar resignFirstResponder];
     //[self OnTouchDown];
     if(SYS_VERSION>=7.0)
     {
@@ -1581,23 +2020,23 @@ extern uint g_oval_color;
         if(YES)
         {
           //  m_Thumbview.hidden = NO;
-            [self.pageNumLabel setHidden:false];
+            [_pageNumLabel setHidden:false];
             [self.navigationController setNavigationBarHidden:NO animated:YES];
             [[UIApplication sharedApplication] setStatusBarHidden:NO];
-            [m_searchBar setHidden:NO];
+            [_m_searchBar setHidden:NO];
         }
         else
         {
-           // m_Thumbview.hidden =YES;
-            [self.pageNumLabel setHidden:true];
-           //[[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
-           [[UIApplication sharedApplication] setStatusBarHidden:YES];
-           // BOOL navBarState = [self.navigationController isNavigationBarHidden];
+            // m_Thumbview.hidden =YES;
+            [_pageNumLabel setHidden:true];
+            //[[UIApplication sharedApplication] setStatusBarHidden:YES withAnimation:UIStatusBarAnimationFade];
+            [[UIApplication sharedApplication] setStatusBarHidden:YES];
+            // BOOL navBarState = [self.navigationController isNavigationBarHidden];
             //Set the navigationBarHidden to the opposite of the current state.
             [self.navigationController setNavigationBarHidden:YES animated:YES];
-            [m_searchBar resignFirstResponder];
-            [m_searchBar setHidden:YES];
-            //[self.navigationController setToolbarHidden:!navBarState animated:YES];
+            [_m_searchBar resignFirstResponder];
+            [_m_searchBar setHidden:YES];
+            //[self.navigationController set_toolBarHidden:!navBarState animated:YES];
             
         }
         b_outline = true;
@@ -1611,13 +2050,13 @@ extern uint g_oval_color;
         {
             m_Thumbview.hidden = NO;
             m_slider.hidden = NO;
-            [self.pageNumLabel setHidden:false];
+            [_pageNumLabel setHidden:false];
         }
         else
         {
             m_Thumbview.hidden =YES;
             m_slider.hidden = YES;
-            [self.pageNumLabel setHidden:true];
+            [_pageNumLabel setHidden:true];
         }
         
         b_outline = true;
@@ -1641,24 +2080,9 @@ extern uint g_oval_color;
     }
     
 }
-/*
--(void)OnTouchDown
-{
-  
-    [popupMenu1 dismiss];
-    [popupMenu2 dismiss];
-    if(m_bSel)
-    {
-        m_bSel = false;
-        [m_view vSelEnd];
-    }
-}
-*/
+
 -(void)OnSelStart :(float)x :(float)y;
 {
-   
-    [popupMenu1 dismiss];
-    [popupMenu2 dismiss];
     if(m_bSel)
     {
         m_bSel = false;
@@ -1667,7 +2091,39 @@ extern uint g_oval_color;
     
 }
 
-- (void)searchBarTextDidBeginEditing:(UISearchBar *)m_searchBar
+- (void)OnSelEnd:(float)x1 :(float)y1 :(float)x2 :(float)y2
+{
+    NSString* selectedText = [m_view vSelGetText];
+    if ([selectedText length] == 0 || [selectedText isEqualToString:@" "]){
+        m_bSel = false;
+    }
+    else {
+        BOOL isActive = [[NSUserDefaults standardUserDefaults] boolForKey:@"actIsActive"];
+        int licenseType = [[[NSUserDefaults standardUserDefaults] objectForKey:@"actActivationType"] intValue];
+        
+        [self becomeFirstResponder];
+        m_bSel = true;
+        _underline = [[UIMenuItem alloc] initWithTitle:@"UDL" action:@selector(UnderLine:)];
+        _highline = [[UIMenuItem alloc] initWithTitle:@"HGL" action:@selector(HighLight:)];
+        _strike = [[UIMenuItem alloc] initWithTitle:@"STR" action:@selector(StrikeOut:)];
+        _textCopy = [[UIMenuItem alloc] initWithTitle:@"COPY" action:@selector(Copy:)];
+        
+        NSArray *itemsMC = [NSArray array];
+        
+        if (!isActive || licenseType < 1) {
+            itemsMC = [[NSArray alloc] initWithObjects:_textCopy, nil];
+        } else {
+            itemsMC = [[NSArray alloc] initWithObjects:_underline,_highline,_strike,_textCopy, nil];
+        }
+                
+        _selectMC = [UIMenuController sharedMenuController];
+        [_selectMC setMenuItems:itemsMC];
+        [_selectMC setTargetRect:CGRectMake(x2,y2, 0, 0) inView:self.view];
+        [_selectMC setMenuVisible:YES animated:YES];
+    }
+}
+
+- (void)searchBarTextDidBeginEditing:(UISearchBar *)_m_searchBar
 {
     b_keyboard = true;
 }
@@ -1707,11 +2163,26 @@ extern uint g_oval_color;
         [[UIApplication sharedApplication]openURL:[NSURL URLWithString:nuri]];
     }
 }
--(void)Mark :(id)sender
+
+-(void)toggleSelection
 {
-    [popupMenu1 dismiss];
-    [popupMenu2 showInView:m_view atPoint:CGPointMake(end_x/2, end_y/2)];
+    if (alreadySelected == false)
+    {
+        [_selButton setTintColor:[UIColor lightGrayColor]];
+        
+        [m_view vSelEnd];
+        [m_view vSelStart];
+        alreadySelected = true;
+    }
+    else
+    {
+        [_selButton setTintColor:_toolBar.tintColor];
+        
+        [m_view vSelEnd];
+        alreadySelected = false;
+    }
 }
+
 -(void)Copy :(id)sender
 {
     
@@ -1719,62 +2190,92 @@ extern uint g_oval_color;
     UIPasteboard *pasteboard = [UIPasteboard generalPasteboard];
     pasteboard.string = s;
     NSLog(@"%@",s);
-    [popupMenu1 dismiss];
+    
     if(m_bSel)
     {
         m_bSel = false;
         [m_view vSelEnd];
     }
     
+    [self toggleSelection];
 }
 -(void)StrikeOut :(id)sender
 {
     //2strikethrough
-    [m_view vSelMarkup:annotUnderlineColor :2];
-    [popupMenu1 dismiss];
+    if(![m_view vSelMarkup:annotStrikeoutColor :2])
+    {
+        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+        NSString *str2=NSLocalizedString(@"This Document is readonly", @"Localizable");
+        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+        UIAlertView *alter = [[UIAlertView alloc] initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil,nil];
+        [alter show];
+        return;
+    }
+    
     if(m_bSel)
     {
         m_bSel = false;
         [m_view vSelEnd];
     }
+    
+    [self toggleSelection];
 }
 
 -(void)HighLight :(id)sender
 {
     //0HighLight
-    [m_view vSelMarkup:annotUnderlineColor :0];
-    [popupMenu1 dismiss];
+    if(![m_view vSelMarkup:annotHighlightColor :0])
+    {
+        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+        NSString *str2=NSLocalizedString(@"This Document is readonly", @"Localizable");
+        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+        UIAlertView *alter = [[UIAlertView alloc] initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil,nil];
+        [alter show];
+        return;
+    }
+    
     if(m_bSel)
     {
         m_bSel = false;
         [m_view vSelEnd];
     }
+    
+    [self toggleSelection];
 }
 -(void)UnderLine :(id)sender
 {
      //1UnderLine
-    [m_view vSelMarkup:annotUnderlineColor :1];
-    [popupMenu1 dismiss];
+    if(![m_view vSelMarkup:annotUnderlineColor :1])
+    {
+        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+        NSString *str2=NSLocalizedString(@"This Document is readonly", @"Localizable");
+        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+        UIAlertView *alter = [[UIAlertView alloc] initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil,nil];
+        [alter show];
+        return;
+    }
+    
     if(m_bSel)
     {
         m_bSel = false;
         [m_view vSelEnd];
     }
+    
+    [self toggleSelection];
 }
-//GEAR
-- (void)moviePlayedDidFinish:(NSNotification *)notification
-{
-    //movie player exit with error
-    if ([[[notification userInfo] valueForKey:MPMoviePlayerPlaybackDidFinishReasonUserInfoKey] intValue] == MPMovieFinishReasonPlaybackError) {
-        UIAlertView *alert = [[UIAlertView alloc] initWithTitle:@"Error" message:@"Unsupported format" delegate:nil cancelButtonTitle:@"OK" otherButtonTitles:nil, nil];
-        [alert show];
-    }
-}
-//END
 
 -(void)TextAnnot :(id)sender
 {
+    if (![m_view canSaveDocument]) {
+        NSString *str1=NSLocalizedString(@"Alert", @"Localizable");
+        NSString *str2=NSLocalizedString(@"This Document is readonly", @"Localizable");
+        NSString *str3=NSLocalizedString(@"OK", @"Localizable");
+        UIAlertView *alter = [[UIAlertView alloc] initWithTitle:str1 message:str2 delegate:self cancelButtonTitle:str3 otherButtonTitles:nil,nil];
+        [alter show];
+        return;
+    }
     
+    b_noteAnnot = NO;
     m_bSel = false;
     b_outline = true;
     [m_view vSelEnd];
@@ -1799,18 +2300,19 @@ extern uint g_oval_color;
     
 }
 
--(void)OnSaveTextAnnot:(NSString *)textAnnot
+-(void)OnSaveTextAnnot:(NSString *)textAnnot subject:(NSString *)subject
 {
     if([textAnnot isEqualToString:@""])
     {
-        [m_view vAnnotEnd];
+        [m_view vNoteEnd];
     }
     else{
         [m_view vNoteEnd];
         if(PDFannot){
+            [PDFannot setPopupSubject:subject];
             [PDFannot setPopupText:textAnnot];
         }else{
-            [m_view vAddTextAnnot:posx :posy:textAnnot];
+            [m_view vAddTextAnnot:posx :posy:textAnnot :subject];
         }
     }
 }
@@ -1847,7 +2349,7 @@ extern uint g_oval_color;
 }
 
 //End PopupView action
-- (void)OnAnnotCommboBox:(NSArray *)dataArray
+- (void)OnAnnotCommboBox:(NSArray *)dataArray selected:(int)index
 {
     NSLog(@"");
     pickViewArr = dataArray;
@@ -1856,7 +2358,7 @@ extern uint g_oval_color;
     [self.view bringSubviewToFront:confirmPickerBtn];
     [self.view bringSubviewToFront:pickerView];
     [pickerView reloadAllComponents];
-    
+    [pickerView selectRow:index inComponent:0 animated:NO];
 }
 
 #pragma mark - Immersive
@@ -1867,10 +2369,10 @@ extern uint g_oval_color;
     {
         m_Thumbview.hidden = NO;
         m_slider.hidden = NO;
-        [self.pageNumLabel setHidden:false];
+        [_pageNumLabel setHidden:false];
         [self.navigationController setNavigationBarHidden:NO animated:YES];
         [[UIApplication sharedApplication] setStatusBarHidden:NO];
-        [m_searchBar setHidden:NO];
+        [_m_searchBar setHidden:NO];
         statusBarHidden = NO;
         isImmersive = NO;
     }
@@ -1881,10 +2383,10 @@ extern uint g_oval_color;
     if(!self.navigationController.navigationBar.hidden)
     {
         m_Thumbview.hidden =YES;
-        [self.pageNumLabel setHidden:true];
+        [_pageNumLabel setHidden:true];
         [self.navigationController setNavigationBarHidden:YES animated:YES];
-        [m_searchBar resignFirstResponder];
-        [m_searchBar setHidden:YES];
+        [_m_searchBar resignFirstResponder];
+        [_m_searchBar setHidden:YES];
         m_slider.hidden = YES;
         statusBarHidden = YES;
         isImmersive = YES;
@@ -1900,25 +2402,62 @@ extern uint g_oval_color;
     
     if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
         
-        viewModePopover = [[UIPopoverController alloc] initWithContentViewController:vm];
-        [viewModePopover setPopoverContentSize:CGSizeMake(300, 44 * 3) animated:NO];
-        [viewModePopover presentPopoverFromBarButtonItem:[self.toolBar.items objectAtIndex:0] permittedArrowDirections:UIPopoverArrowDirectionAny animated:YES];
+        vm.modalPresentationStyle = UIModalPresentationPopover;
+        vm.delegate = self;
+        vm.preferredContentSize = CGSizeMake(320, (44 * 4) + 10);
+        vm.tableView.scrollEnabled = NO;
+        
+        UIPopoverPresentationController *pop = vm.popoverPresentationController;
+        pop.permittedArrowDirections = UIPopoverArrowDirectionUp;
+        pop.barButtonItem = _viewModeButton;
+        
+        [self presentViewController:vm animated:YES completion:nil];
     }
     else
     {
-        b_outline = true;
-        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vm];
-        [self presentViewController:nav animated:YES completion:nil];
+        UIAlertController *action = [UIAlertController alertControllerWithTitle:@"Select View Mode" message:@"" preferredStyle:UIAlertControllerStyleActionSheet];
+        
+        UIAlertAction *cancel = [UIAlertAction actionWithTitle:@"Cancel" style:UIAlertActionStyleCancel handler:^(UIAlertAction * _Nonnull action) {
+            if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+                [self dismissViewControllerAnimated:YES completion:nil];
+            }
+        }];
+        
+        UIAlertAction *vert = [UIAlertAction actionWithTitle:@"Vertical" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self setReaderViewMode:0];
+        }];
+        [vert setValue:[[UIImage imageNamed:@"btn_view_vert"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *horz = [UIAlertAction actionWithTitle:@"Horizontal" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self setReaderViewMode:1];
+        }];
+        [horz setValue:[[UIImage imageNamed:@"btn_view_horz"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *singleP = [UIAlertAction actionWithTitle:@"Single Page" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self setReaderViewMode:3];
+        }];
+        [singleP setValue:[[UIImage imageNamed:@"btn_view_single"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        UIAlertAction *doubleP = [UIAlertAction actionWithTitle:@"Double Page" style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [self setReaderViewMode:4];
+        }];
+        [doubleP setValue:[[UIImage imageNamed:@"btn_view_dual"] imageWithRenderingMode:UIImageRenderingModeAlwaysOriginal] forKey:@"image"];
+        
+        
+        [action addAction:vert];
+        [action addAction:horz];
+        [action addAction:singleP];
+        [action addAction:doubleP];
+        
+        [action addAction:cancel];
+        
+        [self presentViewController:action animated:YES completion:nil];
     }
 }
 
 - (void)setReaderViewMode:(int)mode
 {
-    if ([viewModePopover isPopoverVisible]) {
-        [viewModePopover dismissPopoverAnimated:YES];
-    }
-    
-    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPhone) {
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
         [self dismissViewControllerAnimated:YES completion:nil];
     }
     
@@ -1931,28 +2470,24 @@ extern uint g_oval_color;
     }
     
     switch (mode) {
-        case 0:
-            g_def_view = mode;
-            break;
-        case 1:
-        {
-            g_def_view = 3;
-            g_double_page_enabled = NO;
-            break;
-        }
         case 2:
         {
             g_def_view = 3;
-            g_double_page_enabled = YES;
+            break;
+        }
+        case 3:
+        {
+            g_def_view = 4;
             break;
         }
         default:
+            g_def_view = mode;
             break;
     }
     
     [[NSUserDefaults standardUserDefaults] setInteger:mode forKey:@"DefView"];
     [[NSUserDefaults standardUserDefaults] synchronize];
-    CGRect rect = [[UIScreen mainScreen]bounds];
+    CGRect rect = [self getReaderBounds];
     
     //GEAR
     if (![self isPortrait] && rect.size.width < rect.size.height) {
@@ -1972,7 +2507,7 @@ extern uint g_oval_color;
     [m_view setFirstPageCover:firstPageCover];
     [m_view setDoubleTapZoomMode:doubleTapZoomMode];
     [m_view vOpen :m_doc :(id<PDFViewDelegate>)self];
-    pagecount =[m_doc pageCount];
+    _pagecount =[m_doc pageCount];
     
     if (m_Thumbview) {
         [self.view insertSubview:m_view belowSubview:m_Thumbview];
@@ -2023,6 +2558,29 @@ extern uint g_oval_color;
     }
 }
 
+
+#pragma mark - Signature
+
+- (void)presentSignatureViewController
+{
+    SignatureViewController *sv = [[SignatureViewController alloc] init];
+    sv.delegate = self;
+    
+    if ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) {
+        sv.modalPresentationStyle = UIModalPresentationFormSheet;
+    }
+    
+    [self presentViewController:sv animated:YES completion:nil];
+}
+
+- (void)didSign
+{
+    [self dismissViewControllerAnimated:YES completion:^{
+        [m_view setSignatureImageAtIndex:PDFannot.getIndex atPage:[m_view vGetCurrentPage]];
+        [m_view vAnnotEnd];
+    }];
+}
+
 #pragma mark - Print
 
 - (void)printPdf
@@ -2058,6 +2616,39 @@ extern uint g_oval_color;
     }
 }
 
+#pragma mark - Save
+
+- (void)savePdf
+{
+    if([m_view forceSave])
+    {
+        UIAlertController* alert = [UIAlertController alertControllerWithTitle:@"Notice"
+                                                                       message:@"Document saved"
+                                                                preferredStyle:UIAlertControllerStyleAlert];
+        
+        UIAlertAction* ok = [UIAlertAction
+                             actionWithTitle:@"OK"
+                             style:UIAlertActionStyleDefault
+                             handler:nil];
+        [alert addAction:ok];
+        [self presentViewController:alert animated:YES completion:nil];
+    }
+}
+
+#pragma mark - Attachments
+
+- (BOOL)saveImageFromAnnotAtIndex:(int)index atPage:(int)pageno savePath:(NSString *)path size:(CGSize )size
+{
+    return [m_view saveImageFromAnnotAtIndex:index atPage:pageno savePath:path size:size];
+}
+
+#pragma mark - Annot render
+
+- (BOOL)addAttachmentFromPath:(NSString *)path
+{
+    return [m_view addAttachmentFromPath:path];
+}
+
 #pragma mark - PickerView DataSource and Delegate
 -(NSInteger)numberOfComponentsInPickerView:(UIPickerView *)pickerView{
     return 1;
@@ -2079,16 +2670,24 @@ extern uint g_oval_color;
     confirmPickerBtn.hidden = YES;
 }
 #pragma mark -EditBox delegate
-- (void)OnAnnotEditBox :(CGRect)annotRect :(NSString *)editText
+- (void)OnAnnotEditBox :(CGRect)annotRect :(NSString *)editText :(float)textSize
 {
     NSLog(@"annotRect = %@",NSStringFromCGRect(annotRect));
     textFd.hidden = NO;
     textFd.frame = annotRect;
     textFd.text = editText;
     textFd.backgroundColor = [UIColor whiteColor];
-    textFd.font = [UIFont systemFontOfSize:annotRect.size.height -3];
+    textFd.font = [UIFont systemFontOfSize:textSize]; // To use a custom font you should add it as external font in Xcode project
     [self.view bringSubviewToFront:textFd];
     [textFd becomeFirstResponder];
+}
+
+#pragma mark - annotList Delegate
+- (void)listCheckedAt:(NSArray *)indexes
+{
+    [annotListTV dismissViewControllerAnimated:YES completion:nil];
+    [m_view selectListBoxItems:indexes];
+    [m_view vSelEnd];
 }
 
 #pragma mark - textField Delegate
@@ -2128,7 +2727,8 @@ extern uint g_oval_color;
     NSValue* keyboardFrameBegin = [keyboardInfo valueForKey:UIKeyboardFrameEndUserInfoKey];
     CGRect keyboardFrameBeginRect = [keyboardFrameBegin CGRectValue];
     
-    float gap = (keyboardFrameBeginRect.size.height - 30) - (textFd.frame.origin.y + textFd.frame.size.height);
+    // push the frame up the gap adding 1 pixel so the text field is not exactly on top of the keyboard
+    float gap = (keyboardFrameBeginRect.origin.y - 1) - (textFd.frame.origin.y + textFd.frame.size.height);
     
     if (gap < 0) {
         [self.view setFrame:CGRectMake(0, gap, self.view.frame.size.width, self.view.frame.size.height)];

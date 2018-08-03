@@ -36,6 +36,7 @@ module.exports = function (ctx) {
     
     var platformRoot = path.join(ctx.opts.projectRoot, 'platforms/android');
     var fileImportR = [
+		{filePath: 'src/com/radaee/cordova/RadaeePDFPlugin.java', importStatement: 'com.radaee.reader.R'}, 
     	{filePath: 'src/com/radaee/pdf/Global.java', importStatement: 'com.radaee.viewlib.R'},
     	{filePath: 'src/com/radaee/reader/PDFLayoutView.java', importStatement: 'com.radaee.viewlib.R'},
     	{filePath: 'src/com/radaee/reader/PDFNavAct.java', importStatement: 'com.radaee.viewlib.R'},
@@ -46,7 +47,9 @@ module.exports = function (ctx) {
     	{filePath: 'src/com/radaee/util/PDFGridItem.java', importStatement: 'com.radaee.viewlib.R'},
 		{filePath: 'src/com/radaee/util/PopupEditAct.java', importStatement: 'com.radaee.viewlib.R'},
 		{filePath: 'src/com/radaee/util/CommonUtil.java', importStatement: 'com.radaee.viewlib.R'},
-		{filePath: 'src/com/radaee/util/RadaeePDFManager.java', importStatement: 'com.radaee.reader.R'}
+		{filePath: 'src/com/radaee/util/RadaeePDFManager.java', importStatement: 'com.radaee.viewlib.R'},
+		{filePath: 'src/com/radaee/util/BookmarkHandler.java', importStatement: 'com.radaee.viewlib.R'},
+		{filePath: 'src/com/radaee/util/CaptureSignature.java', importStatement: 'com.radaee.viewlib.R'}
     ];
 
 

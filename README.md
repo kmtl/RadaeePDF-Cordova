@@ -20,7 +20,8 @@ http://www.radaeepdf.com/ecommerce/technical-specification
 ## Usage
 
 1. Create the app using the demo package name, to be able to test all the features (standard, professional and premium).  
-   `cordova create RadaeePDF-Cordova com.radaee.reader RadaeePDF-Cordova`
+   `cordova create RadaeePDF-Cordova com.radaee.reader RadaeePDF-Cordova` (Android)  
+   `cordova create RadaeePDF-Cordova com.radaee.pdf.PDFViewer RadaeePDF-Cordova` (iOS)
 	
 2. Add the android/iOS platform.  
    `cd RadaeePDF-Cordova`    
@@ -30,10 +31,13 @@ http://www.radaeepdf.com/ecommerce/technical-specification
    `cordova plugin add https://github.com/gearit/RadaeePDF-Cordova.git --save`
 	
 4. Build the app.  
-   `cordova build`
-	
+   `cordova build`	
 
 After doing these steps, you will have a ready to use project.
+
+## Compatibility
+
+We do not yet support cordova-android 7.0.0, latest supported version is 6.4.0
 
 ## The JavaScript Interfaces
 
@@ -116,14 +120,17 @@ RadaeePDFPlugin.getFileState(
 	function(err){
 		console.log("Failure: " + err);
     });
-```
+```  
+
+For more examples, check demo/js/index.js  
 
 RadaeePDF library version included:
-- Android: v3.12
-- iOS: v3.8.0
+- Android: v3.15.1
+- iOS: v3.8.4
 
 Original development: 
 - This plugin was created based on [PaoloMessina/RadaeeCordova](https://github.com/PaoloMessina/RadaeeCordova)  
    www.paolomessina.it, email: paolo.messina.it@gmail.com
 
-More information about RadaeePDF SDK on http://www.radaeepdf.com.
+More information about RadaeePDF SDK on http://www.radaeepdf.com.  
+For guide please check [Knowledge Base articles](http://www.radaeepdf.com/support/knowledge-base?view=kb&catid=4)

@@ -17,6 +17,8 @@
 #import "BookmarkTableViewController.h"
 #import "RadaeePDFPlugin.h"
 #import "RDFormManager.h"
+#import "RDMoreTableViewController.h"
+#import "RDAnnotListViewController.h"
 
 @class OutLineViewController;
 @class PDFView;
@@ -32,6 +34,10 @@
 - (void)didCloseReader;
 - (void)didChangePage:(int)page;
 - (void)didSearchTerm:(NSString *)term found:(BOOL)found;
+- (void)didTapOnPage:(int)page atPoint:(CGPoint)point;
+- (void)didDoubleTapOnPage:(int)page atPoint:(CGPoint)point;
+- (void)didLongPressOnPage:(int)page atPoint:(CGPoint)point;
+- (void)didTapOnAnnotationOfType:(int)type atPage:(int)page atPoint:(CGPoint)point;
 @end;
 
 //---------------------------------------------------------
@@ -48,6 +54,7 @@
     BOOL defaultTranslucent;
     BOOL firstPageCover;
     BOOL isImmersive;
+    BOOL readOnly;
     
     int gridBackgroundColor;
     int gridElementHeight;
@@ -83,6 +90,8 @@
     bool m_bSel;
     
     BOOL statusBarHidden;
+    BOOL alreadySelected;
+    
     int posx;
     int posy;
     TextAnnotViewController *textAnnotVC;
@@ -95,6 +104,9 @@
     float annot_x;
     float annot_y;
     //PDFAnnot end
+    
+    BOOL b_keyboard;
+    BOOL b_noteAnnot;
 }
 
 #pragma mark - lib features
@@ -115,6 +127,11 @@
 @property (strong, nonatomic) UIImage *prevImage;
 @property (strong, nonatomic) UIImage *nextImage;
 @property (strong, nonatomic) UIImage *performImage;
+@property (strong, nonatomic) UIImage *drawImage;
+@property (strong, nonatomic) UIImage *selImage;
+@property (strong, nonatomic) UIImage *undoImage;
+@property (strong, nonatomic) UIImage *redoImage;
+@property (strong, nonatomic) UIImage *moreImage;
 
 @property (nonatomic) BOOL hideViewModeImage;
 @property (nonatomic) BOOL hideSearchImage;
@@ -126,6 +143,11 @@
 @property (nonatomic) BOOL hideEllipseImage;
 @property (nonatomic) BOOL hidePrintImage;
 @property (nonatomic) BOOL hideGridImage;
+@property (nonatomic) BOOL hideDrawImage;
+@property (nonatomic) BOOL hideSelImage;
+@property (nonatomic) BOOL hideUndoImage;
+@property (nonatomic) BOOL hideRedoImage;
+@property (nonatomic) BOOL hideMoreImage;
 
 // define delegate property
 @property (nonatomic, assign) id <RDPDFViewControllerDelegate> delegate;
@@ -136,13 +158,23 @@
 @property (strong,nonatomic) UIToolbar *searchToolBar;
 @property (strong,nonatomic) UIToolbar *drawLineToolBar;
 @property (strong,nonatomic) UIToolbar *drawRectToolBar;
-@property (strong, nonatomic) UIWindow *window;
+@property (strong,nonatomic) UIMenuController *selectMC;
+@property (strong,nonatomic) UIMenuItem *textCopy;
+@property (strong,nonatomic) UILabel *confirmedCopy;
+@property (strong,nonatomic) UIMenuItem *underline;
+@property (strong,nonatomic) UIMenuItem *highline;
+@property (strong,nonatomic) UIMenuItem *strike;
+@property (strong,nonatomic) UIWindow *window;
+@property (strong,nonatomic) UIAlertController *moreItemsContainer;
+@property (strong,nonatomic) UIBarButtonItem *moreButton;
+@property (strong,nonatomic) UIBarButtonItem *drawButton;
+@property (strong,nonatomic) UIBarButtonItem *selButton;
+@property (strong,nonatomic) UIBarButtonItem *viewModeButton;
 @property (strong, nonatomic) IBOutlet UISearchBar* m_searchBar;
 @property (strong,nonatomic)IBOutlet UISlider *sliderBar;
 @property (strong,nonatomic)IBOutlet UILabel *pageNumLabel;
 @property (assign, nonatomic)int pagecount;
 @property (assign, nonatomic)int pagenow;
-@property (assign,nonatomic) BOOL b_keyboard;
 @property (assign,nonatomic) PopupMenu* popupMenu;
 - (IBAction)composeFile:(id) sender;
 - (IBAction)searchView:(id) sender;
@@ -166,7 +198,7 @@
 
 -(IBAction)sliderValueChanged:(id)sender;
 -(IBAction)sliderDragUp:(id)sender;
--(int)PDFOpen:(NSString *)path :(NSString *)pwd;
+-(int)PDFOpen:(NSString *)path :(NSString *)pwd atPage:(int)page readOnly:(BOOL)readOnlyEnabled autoSave:(BOOL)autoSaveEnabled;
 -(int)PDFOpenPage:(NSString *)path :(int)pageno : (float)x :(float)y :(NSString *)pwd;
 
 //for test
@@ -183,6 +215,7 @@
 
 - (id)getDoc;
 - (int)getCurrentPage;
+- (CGImageRef)imageForPage:(int)pg;
 - (void)setThumbnailBGColor:(int)color;
 - (void)setThumbGridBGColor:(int)color;
 - (void)setThumbGridElementHeight:(float)height;
@@ -195,6 +228,10 @@
 - (void)setImmersive:(BOOL)immersive;
 
 - (void)refreshCurrentPage;
+
+- (BOOL)saveImageFromAnnotAtIndex:(int)index atPage:(int)pageno savePath:(NSString *)path size:(CGSize )size;
+
+- (BOOL)addAttachmentFromPath:(NSString *)path;
 
 //GEAR
 - (void)moviePlayedDidFinish:(NSNotification *)notification;
