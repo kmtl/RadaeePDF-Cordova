@@ -295,7 +295,7 @@ public class PDFLayoutView extends View implements LayoutListener {
                         PDFEndAnnot();
                     } else if (PDFCanSave() && m_annot.GetEditType() > 0)//if form edit-box.
                     {
-                        onEditAnnot();
+                        //onEditAnnot();
                     } else if (PDFCanSave() && m_annot.GetComboItemCount() >= 0)//if form choice
                     {
                         try {
@@ -1741,7 +1741,8 @@ public class PDFLayoutView extends View implements LayoutListener {
         dlg.show();
     }
 
-    public void PDFPerformAnnot() {
+    public void PDFPerformAnnot(Annotation annot) {
+        if (m_annot == null) m_annot = annot;
         if (m_status != STA_ANNOT) return;
         Page page = m_doc.GetPage(m_annot_page.GetPageNo());
         if (page == null || m_annot == null) return;

@@ -268,7 +268,7 @@ public class Global
 	/**
 	 * Annotation transparency color
 	 */
-	public static int annotTransparencyColor = 0x200040FF;
+	public static int annotTransparencyColor = 0x00FFFFFF;//0x200040FF;
 	/**
 	 * find primary color.
 	 */
@@ -342,7 +342,7 @@ public class Global
 	 * navigation mode, 0:thumbnail view 1:seekbar view
 	 */
 	public static int navigationMode = 1;
-	public static boolean debug_mode = true;
+	public static boolean debug_mode = false; //true;
 	public static boolean highlight_annotation = true;
 	public static boolean save_thumb_in_cache = true;
 	/**

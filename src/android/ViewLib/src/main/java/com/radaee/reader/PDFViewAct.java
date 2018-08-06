@@ -118,7 +118,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener {
         protected void onPostExecute(Integer integer) {
             m_view.PDFOpen(m_doc, PDFViewAct.this);
             m_view.setReadOnly(getIntent().getBooleanExtra("READ_ONLY", false));
-            m_controller = new PDFViewController(m_layout, m_view);
+            //m_controller = new PDFViewController(m_layout, m_view);
             need_save_doc = need_save;
             if (dlg != null)
                 dlg.dismiss();
@@ -244,7 +244,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener {
         if (m_doc == null) {
             m_doc = Document.BundleRestore(savedInstanceState);//restore Document object
             m_view.PDFOpen(m_doc, this);
-            m_controller = new PDFViewController(m_layout, m_view);
+            //m_controller = new PDFViewController(m_layout, m_view);
             need_save_doc = true;
         }
         m_view.BundleRestorePos(savedInstanceState);
@@ -253,7 +253,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener {
     @Override
     public void onBackPressed() {
         if (m_controller == null || m_controller.OnBackPressed()) {
-            if (getFileState() == PDFViewController.MODIFIED_NOT_SAVED) {
+            /*if (getFileState() == PDFViewController.MODIFIED_NOT_SAVED) {
                 if (getIntent().getBooleanExtra("AUTOMATIC_SAVE", false)) {
                     m_controller.savePDF();
                     super.onBackPressed();
@@ -274,7 +274,7 @@ public class PDFViewAct extends Activity implements PDFLayoutListener {
                         }
                     }).show();
                 }
-            } else super.onBackPressed();
+            } else*/ super.onBackPressed();
         }
     }
 
@@ -318,8 +318,9 @@ public class PDFViewAct extends Activity implements PDFLayoutListener {
 
     @Override
     public void OnPDFAnnotTapped(VPage vpage, Annotation annot) {
-        if (m_controller != null)
-            m_controller.OnAnnotTapped(annot);
+        //if (m_controller != null)
+        //    m_controller.OnAnnotTapped(annot);
+        m_view.PDFPerformAnnot(annot);
         if (annot != null)
             RadaeePluginCallback.getInstance().onAnnotTapped(annot);
     }
