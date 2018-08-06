@@ -41,10 +41,6 @@
         <!-- Plugin source -->
         <source-file src="src/android/RadaeePDFPlugin.java" target-dir="src/com/radaee/cordova" />
         <source-file src="src/android/ViewLib/libs/com.radaee.view.jar" target-dir="libs" />
-<<<<<<< HEAD
-		<!--source-file src="src/android/ViewLib/libs/android-support-v4.jar" target-dir="libs" /-->
-=======
->>>>>>> original/master
 
         <!-- Radaee source - java.com.radaee.pdf -->
         <source-file src="src/android/ViewLib/src/main/java/com/radaee/pdf/adv/Obj.java" target-dir="src/com/radaee/pdf/adv" />
@@ -214,17 +210,12 @@
 		<source-file src="src/android/ViewLib/src/main/res/values-v11/styles.xml" target-dir="res/values-v11" />
 		<source-file src="src/android/ViewLib/src/main/res/values-v14/styles.xml" target-dir="res/values-v14" />
 		<source-file src="src/android/ViewLib/src/main/res/values-v21/styles.xml" target-dir="res/values-v21" />
-        <!--
 		<source-file src="src/android/ViewLib/src/main/res/values-ar/strings.xml" target-dir="res/values-ar" />
 		<source-file src="src/android/ViewLib/src/main/res/values-es-rES/strings.xml" target-dir="res/values-es-rES" />
 		<source-file src="src/android/ViewLib/src/main/res/values-fr-rFR/strings.xml" target-dir="res/values-fr-rFR" />
 		<source-file src="src/android/ViewLib/src/main/res/values-it/strings.xml" target-dir="res/values-it" />
-<<<<<<< HEAD
-        -->
-=======
 		<source-file src="src/android/ViewLib/src/main/res/values-sw600dp/bools.xml" target-dir="res/values-sw600dp" />
 		<source-file src="src/android/ViewLib/src/main/res/values-xlarge/bools.xml" target-dir="res/values-xlarge" />
->>>>>>> original/master
 
 		<!-- Radaee res -->
 		<source-file src="src/android/ViewLib/src/main/res/AMIRI_LICENSE.txt" target-dir="res" />
